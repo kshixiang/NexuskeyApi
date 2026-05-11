@@ -50,6 +50,7 @@ export type SiteSettings = {
   Notice: string
   SystemName: string
   Logo: string
+  NexusKeyDownloadUrl: string
   Footer: string
   About: string
   HomePageContent: string

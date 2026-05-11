@@ -33,39 +33,48 @@ export function Hero(props: HeroProps) {
   const { systemName } = useSystemConfig()
 
   return (
-    <section className='relative z-10 flex flex-col items-center overflow-hidden px-6 pt-28 pb-16 md:pt-36 md:pb-24'>
-      {/* Radial gradient background */}
+    <section className='relative z-10 flex flex-col items-center overflow-hidden px-6 pt-28 pb-16 md:pt-36 md:pb-28'>
+      {/* Brand glow + cool depth (Supabase-style marketing) */}
       <div
         aria-hidden
-        className='pointer-events-none absolute inset-0 -z-10 opacity-25 dark:opacity-[0.12]'
+        className='pointer-events-none absolute inset-0 -z-10'
         style={{
           background: [
-            'radial-gradient(ellipse 60% 50% at 20% 20%, oklch(0.72 0.18 250 / 80%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 50% 40% at 80% 15%, oklch(0.65 0.15 200 / 60%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 40% 35% at 40% 80%, oklch(0.70 0.12 280 / 40%) 0%, transparent 70%)',
+            'radial-gradient(ellipse 55% 45% at 50% -10%, oklch(0.55 0.14 158 / 0.35) 0%, transparent 65%)',
+            'radial-gradient(ellipse 50% 40% at 85% 25%, oklch(0.45 0.12 200 / 0.18) 0%, transparent 60%)',
+            'radial-gradient(ellipse 45% 35% at 10% 40%, oklch(0.5 0.1 158 / 0.12) 0%, transparent 55%)',
           ].join(', '),
         }}
       />
-      {/* Grid pattern */}
+      {/* Subtle grid */}
       <div
         aria-hidden
-        className='absolute inset-0 -z-10 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_30%,black_20%,transparent_100%)] bg-[size:4rem_4rem] opacity-[0.08]'
+        className='absolute inset-0 -z-10 bg-[linear-gradient(to_right,oklch(1_0_0/0.04)_1px,transparent_1px),linear-gradient(to_bottom,oklch(1_0_0/0.04)_1px,transparent_1px)] bg-[size:3.5rem_3.5rem] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_20%,black_15%,transparent_75%)]'
+      />
+      {/* Soft diagonal sheen */}
+      <div
+        aria-hidden
+        className='absolute inset-0 -z-10 opacity-[0.07]'
+        style={{
+          background:
+            'repeating-linear-gradient(-35deg, transparent, transparent 80px, oklch(0.85 0.12 158) 80px, oklch(0.85 0.12 158) 81px)',
+        }}
       />
 
-      <div className='flex max-w-3xl flex-col items-center text-center'>
+      <div className='flex max-w-4xl flex-col items-center text-center'>
         <h1
-          className='landing-animate-fade-up text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-bold tracking-tight'
+          className='landing-animate-fade-up text-[clamp(2.1rem,5.8vw,3.65rem)] leading-[1.08] font-semibold tracking-tight text-balance'
           style={{ animationDelay: '0ms' }}
         >
           {t('Unified API Gateway for')}
           <br />
-          <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
+          <span className='bg-gradient-to-r from-emerald-200 via-teal-200 to-cyan-200 bg-clip-text text-transparent'>
             {t('All Your AI Models')}
           </span>
         </h1>
         <p
-          className='landing-animate-fade-up text-muted-foreground/80 mt-5 max-w-lg text-base leading-relaxed opacity-0 md:text-lg'
-          style={{ animationDelay: '80ms' }}
+          className='landing-animate-fade-up text-muted-foreground mt-5 max-w-xl text-base leading-relaxed opacity-0 md:text-lg'
+          style={{ animationDelay: '60ms' }}
         >
           {systemName}{' '}
           {t(
@@ -73,12 +82,12 @@ export function Hero(props: HeroProps) {
           )}
         </p>
         <div
-          className='landing-animate-fade-up mt-8 flex items-center gap-3 opacity-0'
-          style={{ animationDelay: '160ms' }}
+          className='landing-animate-fade-up mt-9 flex flex-wrap items-center justify-center gap-3 opacity-0'
+          style={{ animationDelay: '120ms' }}
         >
           {props.isAuthenticated ? (
             <Button
-              className='group rounded-lg'
+              className='group h-11 rounded-md px-6 shadow-[0_0_0_1px_oklch(1_0_0/0.06),0_12px_40px_-16px_oklch(0.55_0.14_158/0.45)]'
               render={<Link to='/dashboard' />}
             >
               {t('Go to Dashboard')}
@@ -87,7 +96,7 @@ export function Hero(props: HeroProps) {
           ) : (
             <>
               <Button
-                className='group rounded-lg'
+                className='group h-11 rounded-md px-6 shadow-[0_0_0_1px_oklch(1_0_0/0.06),0_12px_40px_-16px_oklch(0.55_0.14_158/0.45)]'
                 render={<Link to='/sign-up' />}
               >
                 {t('Get Started')}
@@ -95,7 +104,7 @@ export function Hero(props: HeroProps) {
               </Button>
               <Button
                 variant='outline'
-                className='border-border/50 hover:border-border hover:bg-muted/50 rounded-lg'
+                className='h-11 rounded-md border-white/15 bg-transparent hover:bg-white/[0.06]'
                 render={<Link to='/pricing' />}
               >
                 {t('View Pricing')}
@@ -107,7 +116,7 @@ export function Hero(props: HeroProps) {
 
       <div
         className='landing-animate-fade-up w-full opacity-0'
-        style={{ animationDelay: '300ms' }}
+        style={{ animationDelay: '200ms' }}
       >
         <HeroTerminalDemo />
       </div>

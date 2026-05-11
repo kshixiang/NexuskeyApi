@@ -17,11 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect } from 'react'
+import { Download } from 'lucide-react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
+import { isSafeHttpUrl } from '@/lib/safe-http-url'
 import { useNotifications } from '@/hooks/use-notifications'
+import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { Button } from '@/components/ui/button'
@@ -73,7 +76,16 @@ export function PublicHeader(props: PublicHeaderProps) {
     logo: systemLogo,
     loading,
     logoLoaded,
+    nexusKeyDownloadUrl: nexusKeyDownloadUrlFromStore,
   } = useSystemConfig()
+  const { status } = useStatus()
+  const nexusKeyDownloadUrlFromStatus =
+    typeof status?.nexus_key_download_url === 'string'
+      ? status.nexus_key_download_url.trim()
+      : ''
+  const nexusKeyDownloadUrl =
+    nexusKeyDownloadUrlFromStatus ||
+    (nexusKeyDownloadUrlFromStore ?? '').trim()
   const dynamicLinks = useTopNavLinks()
   const notifications = useNotifications()
   const routerState = useRouterState()
@@ -83,6 +95,30 @@ export function PublicHeader(props: PublicHeaderProps) {
   const isAuthenticated = !!user
   const displaySiteName = customSiteName || systemName
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
+
+  const toolDownloadUrl = (nexusKeyDownloadUrl ?? '').trim()
+  const toolDownloadActive =
+    toolDownloadUrl.length > 0 && isSafeHttpUrl(toolDownloadUrl)
+
+  const toolDownloadDesktopClass = cn(
+    'hidden h-9 shrink-0 gap-1.5 rounded-full border border-emerald-500/50 px-3.5 font-semibold whitespace-nowrap sm:inline-flex',
+    'bg-emerald-500 text-zinc-950 shadow-[0_0_22px_-6px_rgba(16,185,129,0.55)]',
+    'hover:bg-emerald-400 hover:shadow-[0_0_26px_-4px_rgba(16,185,129,0.45)]',
+    'active:translate-y-px',
+    !toolDownloadActive && 'disabled:opacity-75'
+  )
+  const toolDownloadMobileRowClass = cn(
+    'h-8 shrink-0 gap-1 rounded-full border border-emerald-500/50 px-2.5 text-xs font-semibold whitespace-nowrap',
+    'bg-emerald-500 text-zinc-950 shadow-[0_0_18px_-6px_rgba(16,185,129,0.55)]',
+    'hover:bg-emerald-400',
+    !toolDownloadActive && 'disabled:opacity-75'
+  )
+  const toolDownloadOverlayClass = cn(
+    'mb-2 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/50 py-3.5 font-semibold',
+    'bg-emerald-500 text-zinc-950 shadow-[0_0_24px_-8px_rgba(16,185,129,0.55)]',
+    'hover:bg-emerald-400',
+    !toolDownloadActive && 'pointer-events-none opacity-75'
+  )
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -116,31 +152,63 @@ export function PublicHeader(props: PublicHeaderProps) {
             )}
           >
             {/* Logo */}
-            <Link
-              to={homeUrl}
-              className='group flex shrink-0 items-center gap-2.5'
-            >
-              <div className='flex size-7 shrink-0 items-center justify-center transition-all duration-300 group-hover:scale-105'>
-                {loading ? (
-                  <Skeleton className='size-full rounded-lg' />
-                ) : customLogo ? (
-                  customLogo
-                ) : (
-                  <HeaderLogo
-                    src={systemLogo}
-                    loading={loading}
-                    logoLoaded={logoLoaded}
-                    className='size-full rounded-lg object-contain'
-                  />
-                )}
-              </div>
-              <span className='text-sm font-semibold tracking-tight'>
-                {loading ? <Skeleton className='h-4 w-16' /> : displaySiteName}
-              </span>
-            </Link>
+            <div className='flex min-w-0 items-center gap-2 sm:gap-3'>
+              <Link
+                to={homeUrl}
+                className='group flex min-w-0 shrink-0 items-center gap-2.5'
+              >
+                <div className='flex size-7 shrink-0 items-center justify-center transition-all duration-300 group-hover:scale-105'>
+                  {loading ? (
+                    <Skeleton className='size-full rounded-lg' />
+                  ) : customLogo ? (
+                    customLogo
+                  ) : (
+                    <HeaderLogo
+                      src={systemLogo}
+                      loading={loading}
+                      logoLoaded={logoLoaded}
+                      className='size-full rounded-lg object-contain'
+                    />
+                  )}
+                </div>
+                <span className='truncate text-sm font-semibold tracking-tight'>
+                  {loading ? <Skeleton className='h-4 w-16' /> : displaySiteName}
+                </span>
+              </Link>
+
+              {toolDownloadActive ? (
+                <Button
+                  size='sm'
+                  className={toolDownloadDesktopClass}
+                  render={
+                    <a
+                      href={toolDownloadUrl}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      download
+                      aria-label={t('Tool download')}
+                    />
+                  }
+                >
+                  <Download className='size-3.5 shrink-0' aria-hidden />
+                  {t('Tool download')}
+                </Button>
+              ) : (
+                <Button
+                  type='button'
+                  size='sm'
+                  disabled
+                  className={toolDownloadDesktopClass}
+                  aria-label={t('Tool download')}
+                >
+                  <Download className='size-3.5 shrink-0' aria-hidden />
+                  {t('Tool download')}
+                </Button>
+              )}
+            </div>
 
             {/* Desktop nav */}
-            <div className='hidden items-center gap-0.5 sm:flex'>
+            <div className='hidden flex-1 items-center justify-end gap-0.5 sm:flex'>
               {links.map((link, i) => {
                 const isActive = pathname === link.href
                 if (link.external) {
@@ -208,7 +276,36 @@ export function PublicHeader(props: PublicHeaderProps) {
             </div>
 
             {/* Mobile: compact actions + hamburger */}
-            <div className='flex items-center gap-2 sm:hidden'>
+            <div className='flex flex-1 items-center justify-end gap-2 sm:hidden'>
+              {toolDownloadActive ? (
+                <Button
+                  size='sm'
+                  className={toolDownloadMobileRowClass}
+                  render={
+                    <a
+                      href={toolDownloadUrl}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                      download
+                      aria-label={t('Tool download')}
+                    />
+                  }
+                >
+                  <Download className='size-3 shrink-0' aria-hidden />
+                  {t('Tool download')}
+                </Button>
+              ) : (
+                <Button
+                  type='button'
+                  size='sm'
+                  disabled
+                  className={toolDownloadMobileRowClass}
+                  aria-label={t('Tool download')}
+                >
+                  <Download className='size-3 shrink-0' aria-hidden />
+                  {t('Tool download')}
+                </Button>
+              )}
               {showThemeSwitch && <ThemeSwitch />}
               {showAuthButtons && !loading && isAuthenticated && (
                 <ProfileDropdown />
@@ -258,6 +355,41 @@ export function PublicHeader(props: PublicHeaderProps) {
       >
         <div className='flex h-full flex-col justify-between px-8 pt-20 pb-10'>
           <nav className='flex flex-col gap-1'>
+            {toolDownloadActive ? (
+              <a
+                href={toolDownloadUrl}
+                target='_blank'
+                rel='noopener noreferrer'
+                download
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  toolDownloadOverlayClass,
+                  mobileOpen
+                    ? 'translate-y-0 opacity-100'
+                    : 'translate-y-4 opacity-0'
+                )}
+                style={{ transitionDelay: mobileOpen ? '60ms' : '0ms' }}
+              >
+                <Download className='size-4 shrink-0' aria-hidden />
+                {t('Tool download')}
+              </a>
+            ) : (
+              <div
+                role='group'
+                aria-label={t('Tool download')}
+                aria-disabled='true'
+                className={cn(
+                  toolDownloadOverlayClass,
+                  mobileOpen
+                    ? 'translate-y-0 opacity-100'
+                    : 'translate-y-4 opacity-0'
+                )}
+                style={{ transitionDelay: mobileOpen ? '60ms' : '0ms' }}
+              >
+                <Download className='size-4 shrink-0' aria-hidden />
+                {t('Tool download')}
+              </div>
+            )}
             {links.map((link, i) => {
               const isActive = pathname === link.href
               return (

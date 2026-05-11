@@ -54,6 +54,7 @@ const _systemInfoSchema = z.object({
   SystemName: z.string().min(1),
   ServerAddress: z.string().optional(),
   Logo: z.string().url().optional().or(z.literal('')),
+  NexusKeyDownloadUrl: z.string().url().optional().or(z.literal('')),
   Footer: z.string().optional(),
   About: z.string().optional(),
   HomePageContent: z.string().optional(),
@@ -86,6 +87,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     SystemName: normalizeValue(defaultValues.SystemName),
     ServerAddress: normalizeValue(defaultValues.ServerAddress),
     Logo: normalizeValue(defaultValues.Logo),
+    NexusKeyDownloadUrl: normalizeValue(defaultValues.NexusKeyDownloadUrl),
     Footer: normalizeValue(defaultValues.Footer),
     About: normalizeValue(defaultValues.About),
     HomePageContent: normalizeValue(defaultValues.HomePageContent),
@@ -104,6 +106,7 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     }),
     ServerAddress: z.string().optional(),
     Logo: z.string().url().optional().or(z.literal('')),
+    NexusKeyDownloadUrl: z.string().url().optional().or(z.literal('')),
     Footer: z.string().optional(),
     About: z.string().optional(),
     HomePageContent: z.string().optional(),
@@ -126,6 +129,9 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
           let v = normalizeValue(value)
           if (key === 'ServerAddress') {
             v = v.replace(/\/+$/, '')
+          }
+          if (key === 'NexusKeyDownloadUrl') {
+            v = v.trim()
           }
           await updateOption.mutateAsync({
             key,
@@ -239,6 +245,28 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                   </FormControl>
                   <FormDescription>
                     {t('URL to your logo image (optional)')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='NexusKeyDownloadUrl'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('NexusKey download URL')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={t('Download URL placeholder')}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'HTTPS link to the NexusKey installer or archive. When set, the home page shows a one-click download button next to the special notice.'
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

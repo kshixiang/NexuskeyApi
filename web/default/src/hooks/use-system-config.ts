@@ -37,6 +37,7 @@ interface StatusApiResponse {
   data: {
     system_name?: string
     logo?: string
+    nexus_key_download_url?: string
     footer_html?: string
     demo_site_enabled?: boolean
     display_token_stat_enabled?: boolean
@@ -91,9 +92,15 @@ export function mapStatusDataToConfig(
     ),
   }
 
+  const nexusUrl =
+    typeof data.nexus_key_download_url === 'string'
+      ? data.nexus_key_download_url.trim()
+      : ''
+
   return {
     systemName: data.system_name || DEFAULT_SYSTEM_NAME,
     logo: data.logo || DEFAULT_LOGO,
+    nexusKeyDownloadUrl: nexusUrl || undefined,
     footerHtml: data.footer_html,
     demoSiteEnabled: data.demo_site_enabled,
     displayTokenStatEnabled: data.display_token_stat_enabled,

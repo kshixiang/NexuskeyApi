@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 import { useSetTheme, useTheme, useActualTheme } from '../../context/Theme';
-import { getLogo, getSystemName, API, showSuccess } from '../../helpers';
+import { getLogo, getSystemName, API, showSuccess, isSafeHttpUrl } from '../../helpers';
 import { normalizeLanguage } from '../../i18n/language';
 import { useIsMobile } from './useIsMobile';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
@@ -51,6 +51,19 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
   const isSelfUseMode = statusState?.status?.self_use_mode_enabled || false;
   const docsLink = statusState?.status?.docs_link || '';
   const isDemoSiteMode = statusState?.status?.demo_site_enabled || false;
+
+  let rawNexusDownload = statusState?.status?.nexus_key_download_url;
+  if (typeof rawNexusDownload !== 'string' || !rawNexusDownload.trim()) {
+    try {
+      rawNexusDownload = localStorage.getItem('nexus_key_download_url') || '';
+    } catch {
+      rawNexusDownload = '';
+    }
+  }
+  const toolDownloadUrl =
+    typeof rawNexusDownload === 'string' ? rawNexusDownload.trim() : '';
+  const toolDownloadLinkActive =
+    toolDownloadUrl.length > 0 && isSafeHttpUrl(toolDownloadUrl);
 
   // 获取顶栏模块配置
   const headerNavModulesConfig = statusState?.status?.HeaderNavModules;
@@ -233,6 +246,8 @@ export const useHeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
     isSelfUseMode,
     docsLink,
     isDemoSiteMode,
+    toolDownloadLinkActive,
+    toolDownloadUrl,
     isConsoleRoute,
     theme,
     drawerOpen,

@@ -40,6 +40,8 @@ export interface CurrencyConfig {
 export interface SystemConfig {
   systemName: string
   logo: string
+  /** Direct download URL for NexusKey companion client (from site options). */
+  nexusKeyDownloadUrl?: string
   footerHtml?: string
   demoSiteEnabled?: boolean
   displayTokenStatEnabled?: boolean

@@ -42,6 +42,8 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
     isSelfUseMode,
     docsLink,
     isDemoSiteMode,
+    toolDownloadLinkActive,
+    toolDownloadUrl,
     isConsoleRoute,
     theme,
     headerNavModules,
@@ -109,6 +111,8 @@ const HeaderBar = ({ onMobileMenuToggle, drawerOpen }) => {
 
           <ActionButtons
             isNewYear={isNewYear}
+            toolDownloadLinkActive={toolDownloadLinkActive}
+            toolDownloadUrl={toolDownloadUrl}
             unreadCount={unreadCount}
             onNoticeOpen={handleNoticeOpen}
             theme={theme}

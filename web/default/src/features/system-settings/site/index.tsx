@@ -26,8 +26,9 @@ import {
 const defaultSiteSettings: SiteSettings = {
   'theme.frontend': 'default',
   Notice: '',
-  SystemName: 'New API',
+  SystemName: '神器AI',
   Logo: '',
+  NexusKeyDownloadUrl: '',
   Footer: '',
   About: '',
   HomePageContent: '',

@@ -48,7 +48,7 @@ export function isRoot() {
 
 export function getSystemName() {
   let system_name = localStorage.getItem('system_name');
-  if (!system_name) return 'New API';
+  if (!system_name) return '神器AI';
   return system_name;
 }
 
@@ -67,6 +67,16 @@ export function getUserIdFromLocalStorage() {
 
 export function getFooterHTML() {
   return localStorage.getItem('footer_html');
+}
+
+/** @param {string} value */
+export function isSafeHttpUrl(value) {
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' || u.protocol === 'http:';
+  } catch {
+    return false;
+  }
 }
 
 export async function copy(text) {

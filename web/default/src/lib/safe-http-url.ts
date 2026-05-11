@@ -16,17 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-/**
- * Application-wide constants
- */
 
-// System Configuration Defaults
-export const DEFAULT_SYSTEM_NAME = '神器AI'
-export const DEFAULT_LOGO = '/logo.png'
-
-// LocalStorage Keys
-export const STORAGE_KEYS = {
-  SYSTEM_NAME: 'system_name',
-  LOGO: 'logo',
-  FOOTER_HTML: 'footer_html',
-} as const
+/** True if `value` is an absolute http: or https: URL. */
+export function isSafeHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value)
+    return u.protocol === 'https:' || u.protocol === 'http:'
+  } catch {
+    return false
+  }
+}

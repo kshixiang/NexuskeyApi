@@ -49,18 +49,18 @@ export function HowItWorks() {
   ]
 
   return (
-    <section className='border-border/40 relative z-10 border-t px-6 py-24 md:py-32'>
+    <section className='relative z-10 border-t border-white/[0.06] px-6 py-24 md:py-32'>
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center md:mb-20'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
+          <p className='mb-3 text-xs font-medium tracking-[0.2em] text-primary uppercase'>
             {t('How It Works')}
           </p>
-          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
+          <h2 className='text-2xl font-semibold tracking-tight md:text-3xl'>
             {t('Three steps to get started')}
           </h2>
         </AnimateInView>
 
-        <div className='grid gap-8 md:grid-cols-3 md:gap-12'>
+        <div className='grid gap-10 md:grid-cols-3 md:gap-12'>
           {steps.map((step, i) => (
             <AnimateInView
               key={step.num}
@@ -69,10 +69,10 @@ export function HowItWorks() {
               className='relative flex flex-col items-center text-center'
             >
               <div className='relative mb-6'>
-                <div className='text-muted-foreground border-border/50 bg-muted/30 flex size-16 items-center justify-center rounded-2xl border transition-colors'>
+                <div className='flex size-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-primary transition-colors'>
                   {step.icon}
                 </div>
-                <div className='bg-foreground text-background absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'>
+                <div className='bg-primary text-primary-foreground absolute -top-2 -right-2 flex size-7 items-center justify-center rounded-full text-xs font-semibold tabular-nums shadow-[0_0_20px_-4px_oklch(0.55_0.14_158/0.6)]'>
                   {step.num}
                 </div>
               </div>

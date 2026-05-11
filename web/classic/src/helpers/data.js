@@ -54,6 +54,11 @@ export function setStatusData(data) {
   } else {
     localStorage.removeItem('docs_link');
   }
+  if (data.nexus_key_download_url) {
+    localStorage.setItem('nexus_key_download_url', data.nexus_key_download_url);
+  } else {
+    localStorage.removeItem('nexus_key_download_url');
+  }
 }
 
 export function setUserData(data) {
