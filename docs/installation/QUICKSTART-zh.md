@@ -46,7 +46,11 @@ cd NexuskeyApi
 
 ---
 
-## 三、一键部署（在服务器执行）
+## 三、一键部署（在服务器执行 — 使用你自己改过的代码）
+
+在仓库目录执行时，脚本会**自动从本仓库构建镜像**（编译你的 Go 后端 + `web/default` 前端）。
+
+> 「default」只是项目里新版前端的**目录名**（`web/default`），不是「官方默认皮肤」。你改的页面就在这里。
 
 ```bash
 cd /www/wwwroot/NexuskeyApi
@@ -54,7 +58,7 @@ chmod +x scripts/deploy.sh
 ./scripts/deploy.sh install --dir /www/wwwroot/nexuskey-api --port 3000
 ```
 
-等待出现 `API is healthy` 或脚本结束后的说明。
+不要用 `--upstream`（那是未修改的官方镜像）。等待出现 `API is healthy` 或脚本结束说明。
 
 **检查：**
 
@@ -128,44 +132,32 @@ cd /www/wwwroot/NexuskeyApi
 
 ---
 
-## 七、改了代码/页面但线上没变？
-
-**通常不是分支问题**，而是部署方式问题：
-
-| 你做的 | 实际运行的 |
-|--------|------------|
-| 改了仓库里 `web/`、Go 代码 | 默认 `install` 用的是 **Docker 官方镜像** `calciumion/new-api:latest` |
-| 只在服务器 `git pull` | 若没有 **重新构建镜像**，容器仍是旧程序 |
-
-**要让 https://nexuskey.eu.cc/ 显示你改过的内容：**
+## 七、改了代码后如何更新线上？
 
 ```bash
 cd /www/wwwroot/NexuskeyApi
-git pull                    # 拉取你改过的分支
-./scripts/deploy.sh update --build --dir /www/wwwroot/nexuskey-api
+git pull origin <你的分支>
+./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
 ```
 
-若前端构建报错（`rsbuild` / `vite` 的 `Cannot find module ../dist/...`），先 `git pull` 获取最新 Dockerfile（已改为 Node 执行构建 CLI）。仍失败且只用 **default** 主题时，可加 `--skip-classic`：
+`update` 在仓库目录下会**自动重新构建** `nexuskey-api:local` 并重启容器（无需再手写 `--build`）。
 
-```bash
-./scripts/deploy.sh update --build --skip-classic --dir /www/wwwroot/nexuskey-api
-```
-
-首次若一直用的官方镜像，执行一次带 `--build` 的 install/update 即可。构建约 5–15 分钟（含前端编译）。
-
-验证当前用的镜像：
+验证跑的是你的代码：
 
 ```bash
 grep DEPLOY_IMAGE /www/wwwroot/nexuskey-api/.env
 docker inspect new-api --format '{{.Config.Image}}'
 ```
 
-- 若是 `calciumion/new-api:latest` → 仍是上游版本，不是你的仓库  
-- 应是 `nexuskey-api:local` → 才是本仓库构建结果  
+必须是 **`nexuskey-api:local`**。若是 `calciumion/new-api:latest`，说明用了 `--upstream` 或旧部署，请去掉 `--upstream` 再执行 `update`。
 
-**后台里改的配置**（渠道、模型名等）存在数据库，与代码无关；**页面文案/前端**必须 `--build` 才会更新。
+| 修改位置 | 是否需重新构建 |
+|----------|----------------|
+| `web/default/` 页面、样式 | 是（已包含在自动构建里） |
+| Go 后端 `.go` 文件 | 是 |
+| 管理后台里渠道/模型配置 | 否（在数据库里） |
 
-浏览器可 **Ctrl+F5** 强刷，避免缓存旧静态资源。
+浏览器 **Ctrl+F5** 强刷。构建失败时先 `git pull` 拿最新 `Dockerfile`，再把报错末尾发运维。
 
 ---
 

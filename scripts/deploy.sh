@@ -18,7 +18,9 @@ HTTP_PORT="3000"
 MODE="prod"
 MODE_EXPLICIT=0
 BUILD_FROM_SOURCE=0
-SKIP_CLASSIC=0
+USE_UPSTREAM_IMAGE=0
+SKIP_CLASSIC=1
+WITH_CLASSIC=0
 LOCAL_IMAGE_TAG="nexuskey-api:local"
 LOG_SERVICE=""
 
@@ -38,8 +40,10 @@ Options:
   --port PORT      Host HTTP port (default: 3000)
   --mode MODE      prod (default) | simple
   --simple         Shorthand for --mode simple (SQLite, not for production)
-  --build          Build Docker image from this repo (required for your code/UI changes)
-  --skip-classic   Skip web/classic build (faster; site uses default theme only)
+  --build          Build image from this repo (auto-enabled when Dockerfile is present)
+  --upstream       Use official calciumion/new-api image (NOT your modified code)
+  --with-classic   Also build legacy web/classic UI (slower; omit unless you use it)
+  --skip-classic   Skip web/classic build (default)
   -h, --help       Show this help
 
 Environment:
@@ -47,11 +51,10 @@ Environment:
   DEPLOY_MODE      prod | simple (lower priority than --mode / --simple)
 
 Examples:
-  ./scripts/deploy.sh install
-  ./scripts/deploy.sh install --dir /www/wwwroot/nexuskey-api --port 3000
+  ./scripts/deploy.sh install --dir /www/wwwroot/nexuskey-api
+  ./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
+  ./scripts/deploy.sh install --upstream --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh install --simple --dir /tmp/nexuskey-trial
-  ./scripts/deploy.sh install --build --dir /www/wwwroot/nexuskey-api
-  ./scripts/deploy.sh update --build --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh status --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh backup --dir /www/wwwroot/nexuskey-api
 EOF
@@ -89,8 +92,19 @@ parse_args() {
         BUILD_FROM_SOURCE=1
         shift
         ;;
+      --upstream)
+        USE_UPSTREAM_IMAGE=1
+        BUILD_FROM_SOURCE=0
+        shift
+        ;;
+      --with-classic)
+        WITH_CLASSIC=1
+        SKIP_CLASSIC=0
+        shift
+        ;;
       --skip-classic)
         SKIP_CLASSIC=1
+        WITH_CLASSIC=0
         shift
         ;;
       --service)
@@ -330,8 +344,8 @@ build_local_image() {
     err "Dockerfile not found at ${REPO_ROOT}/Dockerfile"
     exit 1
   fi
-  log "Building image ${LOCAL_IMAGE_TAG} from repository source ..."
-  log "Includes frontend (web/default) + backend — may take 5–15 minutes."
+  log "Building image ${LOCAL_IMAGE_TAG} from YOUR repository ..."
+  log "Compiles: Go backend + web/default (your UI) — typically 5–15 minutes."
   if [ "${SKIP_CLASSIC}" -eq 1 ]; then
     log "BUILD_CLASSIC_THEME=0 (classic theme skipped; use default in admin)"
     docker build --build-arg "BUILD_CLASSIC_THEME=0" \
@@ -349,16 +363,37 @@ using_local_image() {
   [ "${image}" = "${LOCAL_IMAGE_TAG}" ]
 }
 
+ensure_build_strategy() {
+  if [ "${USE_UPSTREAM_IMAGE}" -eq 1 ]; then
+    log "Using upstream Docker image (not your repository code)."
+    return 0
+  fi
+  if [ "${BUILD_FROM_SOURCE}" -eq 0 ] && [ -f "${REPO_ROOT}/Dockerfile" ]; then
+    BUILD_FROM_SOURCE=1
+    log "Auto-enabled: build from this repository (your Go backend + web/default frontend)."
+  fi
+  if [ "${BUILD_FROM_SOURCE}" -eq 1 ]; then
+    if [ "${WITH_CLASSIC}" -eq 1 ]; then
+      SKIP_CLASSIC=0
+      log "Also building web/classic (legacy UI)."
+    else
+      SKIP_CLASSIC=1
+      log "Skipping web/classic — main site UI comes from your web/default changes."
+    fi
+  fi
+}
+
 maybe_build_image() {
+  ensure_build_strategy
   if [ "${BUILD_FROM_SOURCE}" -eq 1 ]; then
     build_local_image
     return 0
   fi
   if using_local_image; then
-    log "Using existing local image $(read_env_var DEPLOY_IMAGE) (pass --build to rebuild after code changes)"
+    log "Using existing local image $(read_env_var DEPLOY_IMAGE) (re-run update to rebuild after git pull)"
   else
-    log "Using upstream image: $(read_env_var DEPLOY_IMAGE || echo 'calciumion/new-api:latest (compose default)')"
-    log "Repo code/UI changes are NOT deployed until you run with --build"
+    log "Using upstream image: $(read_env_var DEPLOY_IMAGE || echo 'calciumion/new-api:latest')}"
+    log "This is NOT your fork. Run from repo without --upstream to build your code."
   fi
 }
 
