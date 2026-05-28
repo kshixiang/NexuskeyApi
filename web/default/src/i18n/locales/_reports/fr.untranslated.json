@@ -1,6 +1,7 @@
 {
   "Click a model to configure pricing": "Click a model to configure pricing",
   "Each tier supports up to 2 conditions. The last tier without conditions is the fallback.": "Each tier supports up to 2 conditions. The last tier without conditions is the fallback.",
+  "Failed to load pricing data": "Failed to load pricing data",
   "Failed to read clipboard": "Failed to read clipboard",
   "Fetch models from upstream, then click a model to set pricing.": "Fetch models from upstream, then click a model to set pricing.",
   "Models and pricing": "Models and pricing",

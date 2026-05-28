@@ -76,6 +76,7 @@ import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
 } from './api-key-group-combobox'
+import { ApiKeyGroupModelsPanel } from './api-key-group-models-panel'
 import { useApiKeys } from './api-keys-provider'
 
 type ApiKeyMutateDrawerProps = {
@@ -328,6 +329,8 @@ export function ApiKeysMutateDrawer({
                   </FormItem>
                 )}
               />
+
+              <ApiKeyGroupModelsPanel group={selectedGroup} />
 
               {selectedGroup === 'auto' && (
                 <FormField
