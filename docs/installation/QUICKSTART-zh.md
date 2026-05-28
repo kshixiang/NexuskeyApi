@@ -132,7 +132,35 @@ cd /www/wwwroot/NexuskeyApi
 
 ---
 
-## 七、改了代码后如何更新线上？
+## 七、已部署但不是自己的代码？先停再换
+
+当前若是官方镜像，站点不会显示你改过的页面。在服务器执行：
+
+```bash
+cd /www/wwwroot/NexuskeyApi
+git pull
+
+# 一键：停止旧容器 + 用本仓库重新构建并启动（数据库数据保留）
+./scripts/deploy.sh redeploy --dir /www/wwwroot/nexuskey-api
+```
+
+或分两步：
+
+```bash
+./scripts/deploy.sh stop --dir /www/wwwroot/nexuskey-api
+./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
+```
+
+确认镜像：
+
+```bash
+docker inspect new-api --format '{{.Config.Image}}'
+# 必须是 nexuskey-api:local
+```
+
+---
+
+## 八、改了代码后如何更新线上？
 
 ```bash
 cd /www/wwwroot/NexuskeyApi
@@ -161,7 +189,7 @@ docker inspect new-api --format '{{.Config.Image}}'
 
 ---
 
-## 八、故障排查
+## 九、故障排查
 
 | 现象 | 处理 |
 |------|------|
@@ -172,7 +200,7 @@ docker inspect new-api --format '{{.Config.Image}}'
 
 ---
 
-## 九、相关文档
+## 十、相关文档
 
 - [deploy-tool.md](./deploy-tool.md) — 脚本参数与环境变量
 - [BT.md](./BT.md) — 宝塔其他安装方式

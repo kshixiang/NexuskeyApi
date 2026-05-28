@@ -31,7 +31,9 @@ Usage: scripts/deploy.sh [command] [options]
 Commands:
   install   Deploy or refresh stack (default)
   status    Show container status and API health
-  update    Pull latest images and restart
+  stop      Stop all containers (keeps data/DB volumes)
+  update    Rebuild from repo (if applicable) and restart
+  redeploy  stop + update (switch from upstream image to your code)
   logs      Follow new-api container logs (use: logs --service postgres|redis)
   backup    Archive data/, logs/, and .env from deploy directory (prod: metadata only)
 
@@ -52,6 +54,7 @@ Environment:
 
 Examples:
   ./scripts/deploy.sh install --dir /www/wwwroot/nexuskey-api
+  ./scripts/deploy.sh stop --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh install --upstream --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh install --simple --dir /tmp/nexuskey-trial
@@ -505,6 +508,16 @@ cmd_status() {
   fi
 }
 
+cmd_stop() {
+  require_docker
+  resolve_deploy_dir
+  load_deploy_mode
+  log "Deploy directory: ${DEPLOY_DIR}"
+  log "Stopping containers (database data is preserved) ..."
+  docker_compose down
+  log "Stopped."
+}
+
 cmd_update() {
   require_docker
   resolve_deploy_dir
@@ -512,21 +525,24 @@ cmd_update() {
   log "Mode: ${MODE}"
   log "Deploy directory: ${DEPLOY_DIR}"
   ensure_env_file
+  ensure_build_strategy
   if [ "${BUILD_FROM_SOURCE}" -eq 1 ]; then
     build_local_image
-    log "Recreating containers with rebuilt image ..."
-    docker_compose up -d --force-recreate
   elif using_local_image; then
-    log "Local image mode: skipping pull (use --build after git pull to rebuild)"
-    docker_compose up -d --force-recreate
+    log "Reusing image $(read_env_var DEPLOY_IMAGE); run from repo after git pull to auto-rebuild"
   else
     log "Pulling latest upstream images ..."
     docker_compose pull
-    log "Recreating containers ..."
-    docker_compose up -d
   fi
+  log "Recreating containers ..."
+  docker_compose up -d --force-recreate
   wait_for_health
   log "Update complete"
+}
+
+cmd_redeploy() {
+  cmd_stop
+  cmd_update
 }
 
 cmd_logs() {
@@ -557,7 +573,9 @@ cmd_backup() {
 case "${CMD}" in
   install) parse_args "$@"; cmd_install ;;
   status) parse_args "$@"; cmd_status ;;
+  stop) parse_args "$@"; cmd_stop ;;
   update) parse_args "$@"; cmd_update ;;
+  redeploy) parse_args "$@"; cmd_redeploy ;;
   logs) parse_args "$@"; cmd_logs ;;
   backup) parse_args "$@"; cmd_backup ;;
   -h | --help | help)
