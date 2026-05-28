@@ -332,12 +332,13 @@ build_local_image() {
   fi
   log "Building image ${LOCAL_IMAGE_TAG} from repository source ..."
   log "Includes frontend (web/default) + backend — may take 5–15 minutes."
-  local -a build_args=()
   if [ "${SKIP_CLASSIC}" -eq 1 ]; then
-    build_args+=(--build-arg "BUILD_CLASSIC_THEME=0")
     log "BUILD_CLASSIC_THEME=0 (classic theme skipped; use default in admin)"
+    docker build --build-arg "BUILD_CLASSIC_THEME=0" \
+      -t "${LOCAL_IMAGE_TAG}" -f "${REPO_ROOT}/Dockerfile" "${REPO_ROOT}"
+  else
+    docker build -t "${LOCAL_IMAGE_TAG}" -f "${REPO_ROOT}/Dockerfile" "${REPO_ROOT}"
   fi
-  docker build "${build_args[@]}" -t "${LOCAL_IMAGE_TAG}" -f "${REPO_ROOT}/Dockerfile" "${REPO_ROOT}"
   set_env_var DEPLOY_IMAGE "${LOCAL_IMAGE_TAG}"
   log "Set DEPLOY_IMAGE=${LOCAL_IMAGE_TAG} in ${DEPLOY_DIR}/.env"
 }
