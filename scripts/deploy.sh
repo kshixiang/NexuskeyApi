@@ -17,6 +17,8 @@ DEPLOY_DIR="${DEPLOY_DIR:-}"
 HTTP_PORT="3000"
 MODE="prod"
 MODE_EXPLICIT=0
+BUILD_FROM_SOURCE=0
+LOCAL_IMAGE_TAG="nexuskey-api:local"
 LOG_SERVICE=""
 
 usage() {
@@ -35,6 +37,7 @@ Options:
   --port PORT      Host HTTP port (default: 3000)
   --mode MODE      prod (default) | simple
   --simple         Shorthand for --mode simple (SQLite, not for production)
+  --build          Build Docker image from this repo (required for your code/UI changes)
   -h, --help       Show this help
 
 Environment:
@@ -45,8 +48,9 @@ Examples:
   ./scripts/deploy.sh install
   ./scripts/deploy.sh install --dir /www/wwwroot/nexuskey-api --port 3000
   ./scripts/deploy.sh install --simple --dir /tmp/nexuskey-trial
+  ./scripts/deploy.sh install --build --dir /www/wwwroot/nexuskey-api
+  ./scripts/deploy.sh update --build --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh status --dir /www/wwwroot/nexuskey-api
-  ./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh backup --dir /www/wwwroot/nexuskey-api
 EOF
 }
@@ -77,6 +81,10 @@ parse_args() {
       --simple)
         MODE="simple"
         MODE_EXPLICIT=1
+        shift
+        ;;
+      --build)
+        BUILD_FROM_SOURCE=1
         shift
         ;;
       --service)
@@ -311,6 +319,37 @@ ensure_env_file() {
   fi
 }
 
+build_local_image() {
+  if [ ! -f "${REPO_ROOT}/Dockerfile" ]; then
+    err "Dockerfile not found at ${REPO_ROOT}/Dockerfile"
+    exit 1
+  fi
+  log "Building image ${LOCAL_IMAGE_TAG} from repository source ..."
+  log "Includes frontend (web/default) + backend — may take 5–15 minutes."
+  docker build -t "${LOCAL_IMAGE_TAG}" -f "${REPO_ROOT}/Dockerfile" "${REPO_ROOT}"
+  set_env_var DEPLOY_IMAGE "${LOCAL_IMAGE_TAG}"
+  log "Set DEPLOY_IMAGE=${LOCAL_IMAGE_TAG} in ${DEPLOY_DIR}/.env"
+}
+
+using_local_image() {
+  local image
+  image="$(read_env_var DEPLOY_IMAGE || true)"
+  [ "${image}" = "${LOCAL_IMAGE_TAG}" ]
+}
+
+maybe_build_image() {
+  if [ "${BUILD_FROM_SOURCE}" -eq 1 ]; then
+    build_local_image
+    return 0
+  fi
+  if using_local_image; then
+    log "Using existing local image $(read_env_var DEPLOY_IMAGE) (pass --build to rebuild after code changes)"
+  else
+    log "Using upstream image: $(read_env_var DEPLOY_IMAGE || echo 'calciumion/new-api:latest (compose default)')"
+    log "Repo code/UI changes are NOT deployed until you run with --build"
+  fi
+}
+
 wait_for_health() {
   local port
   port="$(read_env_var HTTP_PORT || echo "${HTTP_PORT}")"
@@ -392,6 +431,7 @@ cmd_install() {
   log "Mode: ${MODE}"
   log "Deploy directory: ${DEPLOY_DIR}"
   ensure_env_file
+  maybe_build_image
   log "Starting containers ..."
   docker_compose up -d
   wait_for_health || true
@@ -425,10 +465,19 @@ cmd_update() {
   log "Mode: ${MODE}"
   log "Deploy directory: ${DEPLOY_DIR}"
   ensure_env_file
-  log "Pulling latest images ..."
-  docker_compose pull
-  log "Recreating containers ..."
-  docker_compose up -d
+  if [ "${BUILD_FROM_SOURCE}" -eq 1 ]; then
+    build_local_image
+    log "Recreating containers with rebuilt image ..."
+    docker_compose up -d --force-recreate
+  elif using_local_image; then
+    log "Local image mode: skipping pull (use --build after git pull to rebuild)"
+    docker_compose up -d --force-recreate
+  else
+    log "Pulling latest upstream images ..."
+    docker_compose pull
+    log "Recreating containers ..."
+    docker_compose up -d
+  fi
   wait_for_health
   log "Update complete"
 }

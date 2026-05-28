@@ -128,7 +128,42 @@ cd /www/wwwroot/NexuskeyApi
 
 ---
 
-## 七、故障排查
+## 七、改了代码/页面但线上没变？
+
+**通常不是分支问题**，而是部署方式问题：
+
+| 你做的 | 实际运行的 |
+|--------|------------|
+| 改了仓库里 `web/`、Go 代码 | 默认 `install` 用的是 **Docker 官方镜像** `calciumion/new-api:latest` |
+| 只在服务器 `git pull` | 若没有 **重新构建镜像**，容器仍是旧程序 |
+
+**要让 https://nexuskey.eu.cc/ 显示你改过的内容：**
+
+```bash
+cd /www/wwwroot/NexuskeyApi
+git pull                    # 拉取你改过的分支
+./scripts/deploy.sh update --build --dir /www/wwwroot/nexuskey-api
+```
+
+首次若一直用的官方镜像，执行一次带 `--build` 的 install/update 即可。构建约 5–15 分钟（含前端编译）。
+
+验证当前用的镜像：
+
+```bash
+grep DEPLOY_IMAGE /www/wwwroot/nexuskey-api/.env
+docker inspect new-api --format '{{.Config.Image}}'
+```
+
+- 若是 `calciumion/new-api:latest` → 仍是上游版本，不是你的仓库  
+- 应是 `nexuskey-api:local` → 才是本仓库构建结果  
+
+**后台里改的配置**（渠道、模型名等）存在数据库，与代码无关；**页面文案/前端**必须 `--build` 才会更新。
+
+浏览器可 **Ctrl+F5** 强刷，避免缓存旧静态资源。
+
+---
+
+## 八、故障排查
 
 | 现象 | 处理 |
 |------|------|
@@ -139,7 +174,7 @@ cd /www/wwwroot/NexuskeyApi
 
 ---
 
-## 八、相关文档
+## 九、相关文档
 
 - [deploy-tool.md](./deploy-tool.md) — 脚本参数与环境变量
 - [BT.md](./BT.md) — 宝塔其他安装方式
