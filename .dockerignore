@@ -1,6 +1,8 @@
 .github
 .git
 *.md
+# Required by Dockerfile final stage (license compliance)
+!THIRD-PARTY-LICENSES.md
 .vscode
 .gitignore
 Makefile
