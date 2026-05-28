@@ -1,14 +1,19 @@
+# Node runs Rsbuild/Vite CLIs; Bun installs deps (--backend=copy fixes broken .bin shims in Docker).
+FROM node:22-bookworm-slim AS nodejs
+
 FROM oven/bun:1@sha256:0733e50325078969732ebe3b15ce4c4be5082f18c4ac1a0f0ca4839c2e4e42a7 AS builder
+COPY --from=nodejs /usr/local/bin/node /usr/local/bin/node
 
 WORKDIR /build
-COPY web/default/package.json .
-COPY web/default/bun.lock .
-RUN bun install
+COPY web/default/package.json web/default/bun.lock ./
+RUN bun install --frozen-lockfile --backend=copy
 COPY ./web/default .
 COPY ./VERSION .
-RUN DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat VERSION) bun run build
+RUN DISABLE_ESLINT_PLUGIN='true' VITE_REACT_APP_VERSION=$(cat VERSION) \
+    node ./node_modules/@rsbuild/core/bin/rsbuild.js build
 
 FROM oven/bun:1@sha256:0733e50325078969732ebe3b15ce4c4be5082f18c4ac1a0f0ca4839c2e4e42a7 AS builder-classic
+COPY --from=nodejs /usr/local/bin/node /usr/local/bin/node
 
 # Set to 0 to skip classic theme build (placeholder dist; default theme only).
 ARG BUILD_CLASSIC_THEME=1
@@ -20,7 +25,7 @@ RUN if [ "$BUILD_CLASSIC_THEME" = "1" ]; then bun install --frozen-lockfile --ba
 COPY ./web/classic .
 COPY ./VERSION .
 RUN if [ "$BUILD_CLASSIC_THEME" = "1" ]; then \
-      VITE_REACT_APP_VERSION=$(cat VERSION) bun ./node_modules/vite/bin/vite.js build; \
+      VITE_REACT_APP_VERSION=$(cat VERSION) node ./node_modules/vite/bin/vite.js build; \
     else \
       mkdir -p dist && printf '%s\n' \
         '<!doctype html><html><head><meta charset="utf-8"><title>classic</title></head><body>classic theme not built</body></html>' \

@@ -145,7 +145,7 @@ git pull                    # 拉取你改过的分支
 ./scripts/deploy.sh update --build --dir /www/wwwroot/nexuskey-api
 ```
 
-若 classic 主题构建报错（`vite` / `cli.js`），且后台只用 **default** 主题，可加 `--skip-classic`：
+若前端构建报错（`rsbuild` / `vite` 的 `Cannot find module ../dist/...`），先 `git pull` 获取最新 Dockerfile（已改为 Node 执行构建 CLI）。仍失败且只用 **default** 主题时，可加 `--skip-classic`：
 
 ```bash
 ./scripts/deploy.sh update --build --skip-classic --dir /www/wwwroot/nexuskey-api
