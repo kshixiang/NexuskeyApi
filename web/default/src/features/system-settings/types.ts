@@ -379,3 +379,26 @@ export type UpstreamRatiosResponse = {
     test_results: TestResult[]
   }
 }
+
+export type BuiltinModelPricing = {
+  model: string
+  matched_model: string
+  found: boolean
+  /** basellm | modelsdev */
+  source?: string
+  use_price: boolean
+  price?: number
+  ratio?: number
+  completion_ratio?: number
+  cache_ratio?: number
+  create_cache_ratio?: number
+  image_ratio?: number
+  audio_ratio?: number
+  audio_completion_ratio?: number
+}
+
+export type BuiltinModelPricingResponse = {
+  success: boolean
+  message?: string
+  data: BuiltinModelPricing
+}

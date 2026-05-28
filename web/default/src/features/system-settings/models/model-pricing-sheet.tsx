@@ -16,12 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as z from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertTriangle, ChevronDown } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Loader2, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -65,6 +66,8 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
+import { fetchBuiltinModelPricing } from '../api'
+import { builtinPricingToModelRatioData } from './model-pricing-persist'
 import { TieredPricingEditor } from './tiered-pricing-editor'
 
 const createModelPricingSchema = (t: (key: string) => string) =>
@@ -430,6 +433,7 @@ export function ModelPricingEditorPanel({
   const [billingExpr, setBillingExpr] = useState('')
   const [requestRuleExpr, setRequestRuleExpr] = useState('')
   const [previewOpen, setPreviewOpen] = useState(true)
+  const [isSyncingOfficial, setIsSyncingOfficial] = useState(false)
   const isEditMode = !!editData
 
   const form = useForm<ModelPricingFormValues>({
@@ -447,52 +451,111 @@ export function ModelPricingEditorPanel({
     },
   })
 
-  useEffect(() => {
-    const nextLaneState = createInitialLaneState(editData)
+  const applyPricingData = useCallback(
+    (data: ModelRatioData) => {
+      const nextLaneState = createInitialLaneState(data)
 
-    if (editData) {
       form.reset({
-        name: editData.name,
-        price: editData.price || '',
-        ratio: editData.ratio || '',
-        cacheRatio: editData.cacheRatio || '',
-        createCacheRatio: editData.createCacheRatio || '',
-        completionRatio: editData.completionRatio || '',
-        imageRatio: editData.imageRatio || '',
-        audioRatio: editData.audioRatio || '',
-        audioCompletionRatio: editData.audioCompletionRatio || '',
+        name: data.name,
+        price: data.price || '',
+        ratio: data.ratio || '',
+        cacheRatio: data.cacheRatio || '',
+        createCacheRatio: data.createCacheRatio || '',
+        completionRatio: data.completionRatio || '',
+        imageRatio: data.imageRatio || '',
+        audioRatio: data.audioRatio || '',
+        audioCompletionRatio: data.audioCompletionRatio || '',
       })
       setPricingMode(
-        editData.billingMode === 'tiered_expr'
+        data.billingMode === 'tiered_expr'
           ? 'tiered_expr'
-          : editData.price
+          : data.price
             ? 'per-request'
             : 'per-token'
       )
-      setBillingExpr(editData.billingExpr || '')
-      setRequestRuleExpr(editData.requestRuleExpr || '')
-    } else {
-      form.reset({
-        name: '',
-        price: '',
-        ratio: '',
-        cacheRatio: '',
-        createCacheRatio: '',
-        completionRatio: '',
-        imageRatio: '',
-        audioRatio: '',
-        audioCompletionRatio: '',
-      })
-      setPricingMode('per-token')
-      setBillingExpr('')
-      setRequestRuleExpr('')
+      setBillingExpr(data.billingExpr || '')
+      setRequestRuleExpr(data.requestRuleExpr || '')
+      setPromptPrice(nextLaneState.promptPrice)
+      setLanePrices(nextLaneState.prices)
+      setLaneEnabled(nextLaneState.enabled)
+      setPreviewOpen(true)
+    },
+    [form]
+  )
+
+  useEffect(() => {
+    if (editData) {
+      applyPricingData(editData)
+      return
     }
 
+    form.reset({
+      name: '',
+      price: '',
+      ratio: '',
+      cacheRatio: '',
+      createCacheRatio: '',
+      completionRatio: '',
+      imageRatio: '',
+      audioRatio: '',
+      audioCompletionRatio: '',
+    })
+    setPricingMode('per-token')
+    setBillingExpr('')
+    setRequestRuleExpr('')
+    const nextLaneState = createInitialLaneState(null)
     setPromptPrice(nextLaneState.promptPrice)
     setLanePrices(nextLaneState.prices)
     setLaneEnabled(nextLaneState.enabled)
     setPreviewOpen(true)
-  }, [editData, form])
+  }, [editData, form, applyPricingData])
+
+  const handleSyncOfficialPricing = async () => {
+    const modelName = form.getValues('name').trim()
+    if (!modelName) {
+      toast.error(t('Model name is required'))
+      return
+    }
+
+    setIsSyncingOfficial(true)
+    try {
+      const response = await fetchBuiltinModelPricing(modelName)
+      if (!response.success || !response.data?.found) {
+        toast.error(t('No official pricing found for this model'))
+        return
+      }
+
+      const synced = builtinPricingToModelRatioData(modelName, response.data)
+      applyPricingData(synced)
+
+      const matched = response.data.matched_model
+      const sourceKey =
+        response.data.source === 'basellm'
+          ? 'basellm official preset'
+          : response.data.source === 'modelsdev'
+            ? 'models.dev price preset'
+            : 'official pricing'
+
+      if (matched && matched !== modelName) {
+        toast.success(
+          t(
+            'Official pricing applied from {{source}} (matched: {{model}}). Adjust before saving.',
+            { source: t(sourceKey), model: matched }
+          )
+        )
+      } else {
+        toast.success(
+          t('Official pricing applied from {{source}}. Adjust before saving.', {
+            source: t(sourceKey),
+          })
+        )
+      }
+    } catch {
+      toast.error(t('Failed to sync official pricing'))
+    } finally {
+      setIsSyncingOfficial(false)
+    }
+  }
 
   const setFormValue = (field: keyof ModelPricingFormValues, value: string) => {
     form.setValue(field, value, {
@@ -751,9 +814,25 @@ export function ModelPricingEditorPanel({
               {activeName}
             </p>
           </div>
-          <Badge variant={getModeBadgeVariant(pricingMode)}>
-            {t(getModeLabel(pricingMode))}
-          </Badge>
+          <div className='flex flex-wrap items-center gap-2'>
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              disabled={isSyncingOfficial}
+              onClick={() => void handleSyncOfficialPricing()}
+            >
+              {isSyncingOfficial ? (
+                <Loader2 className='size-4 animate-spin' />
+              ) : (
+                <RefreshCw className='size-4' />
+              )}
+              {t('Sync official pricing')}
+            </Button>
+            <Badge variant={getModeBadgeVariant(pricingMode)}>
+              {t(getModeLabel(pricingMode))}
+            </Badge>
+          </div>
         </div>
       </div>
 

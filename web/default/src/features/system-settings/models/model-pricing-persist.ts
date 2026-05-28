@@ -20,7 +20,52 @@ import { combineBillingExpr, splitBillingExprAndRequestRules } from '@/features/
 import type { UpdateOptionRequest } from '../types'
 import { safeJsonParse } from '../utils/json-parser'
 import { normalizeJsonString } from './utils'
+import type { BuiltinModelPricing } from '../types'
 import type { ModelRatioData } from './model-pricing-sheet'
+
+function formatBuiltinNumber(value: number | undefined): string {
+  if (value === undefined || Number.isNaN(value)) return ''
+  return String(value)
+}
+
+const emptyRatioFields = {
+  cacheRatio: '',
+  createCacheRatio: '',
+  completionRatio: '',
+  imageRatio: '',
+  audioRatio: '',
+  audioCompletionRatio: '',
+}
+
+export function builtinPricingToModelRatioData(
+  model: string,
+  payload: BuiltinModelPricing
+): ModelRatioData {
+  const name = model.trim() || payload.model
+
+  if (payload.use_price && payload.price != null) {
+    return {
+      name,
+      billingMode: 'per-request',
+      price: formatBuiltinNumber(payload.price),
+      ratio: '',
+      ...emptyRatioFields,
+    }
+  }
+
+  return {
+    name,
+    billingMode: 'per-token',
+    price: '',
+    ratio: formatBuiltinNumber(payload.ratio),
+    completionRatio: formatBuiltinNumber(payload.completion_ratio),
+    cacheRatio: formatBuiltinNumber(payload.cache_ratio),
+    createCacheRatio: formatBuiltinNumber(payload.create_cache_ratio),
+    imageRatio: formatBuiltinNumber(payload.image_ratio),
+    audioRatio: formatBuiltinNumber(payload.audio_ratio),
+    audioCompletionRatio: formatBuiltinNumber(payload.audio_completion_ratio),
+  }
+}
 
 export type ModelPricingOptionsSnapshot = {
   ModelPrice: string

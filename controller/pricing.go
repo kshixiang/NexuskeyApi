@@ -99,3 +99,23 @@ func ResetModelRatio(c *gin.Context) {
 		"message": "重置模型倍率成功",
 	})
 }
+
+func GetBuiltinModelPricing(c *gin.Context) {
+	modelName := c.Query("model")
+	source := c.Query("source")
+
+	pricing, err := resolveOfficialModelPricing(c.Request.Context(), modelName, source)
+	if err != nil {
+		c.JSON(200, gin.H{
+			"success": false,
+			"message": err.Error(),
+			"data":    pricing,
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"success": true,
+		"data":    pricing,
+	})
+}

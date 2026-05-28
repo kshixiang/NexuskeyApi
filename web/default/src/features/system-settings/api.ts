@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 import type {
+  BuiltinModelPricingResponse,
   DeleteLogsResponse,
   FetchUpstreamRatiosRequest,
   SystemOptionsResponse,
@@ -62,6 +63,14 @@ export async function fetchUpstreamRatios(request: FetchUpstreamRatiosRequest) {
   const res = await api.post<UpstreamRatiosResponse>(
     '/api/ratio_sync/fetch',
     request
+  )
+  return res.data
+}
+
+export async function fetchBuiltinModelPricing(model: string) {
+  const res = await api.get<BuiltinModelPricingResponse>(
+    '/api/option/builtin_model_pricing',
+    { params: { model } }
   )
   return res.data
 }

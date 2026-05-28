@@ -6,5 +6,6 @@
   "Models and pricing": "Models and pricing",
   "Models, groups, and mappings are copied. You must enter a new API key for the duplicate channel.": "Models, groups, and mappings are copied. You must enter a new API key for the duplicate channel.",
   "Review and create": "Review and create",
+  "Failed to sync official pricing": "Failed to sync official pricing",
   "{{count}} model(s) have no pricing configured yet. You can still create the channel.": "{{count}} model(s) have no pricing configured yet. You can still create the channel."
 }
