@@ -150,7 +150,9 @@ import {
   collectNewDisallowedStatusCodeRedirects,
 } from '../../lib/status-code-risk-guard'
 import type { Channel } from '../../types'
+import { useChannelModelPricing } from '../../hooks/use-channel-model-pricing'
 import { useChannels } from '../channels-provider'
+import { ModelPricingSheet } from '@/features/system-settings/models/model-pricing-sheet'
 import { CodexOAuthDialog } from '../dialogs/codex-oauth-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
 import {
@@ -299,6 +301,13 @@ export function ChannelMutateDrawer({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { setOpen } = useChannels()
+  const {
+    pricingOpen,
+    setPricingOpen,
+    pricingModel,
+    openModelPricing,
+    handlePricingSave,
+  } = useChannelModelPricing()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [customModel, setCustomModel] = useState('')
   const [isFetchingModels, setIsFetchingModels] = useState(false)
@@ -2201,12 +2210,18 @@ export function ChannelMutateDrawer({
                           options={modelOptions}
                           selected={currentModelsArray}
                           onChange={handleModelsChange}
+                          onItemClick={openModelPricing}
                           placeholder={t('Select models or add custom ones')}
                         />
                       </FormControl>
                       <FormDescription>
                         <div className='flex flex-col gap-2'>
                           <span>{t(FIELD_DESCRIPTIONS.MODELS)}</span>
+                          {currentModelsArray.length > 0 && (
+                            <span className='text-muted-foreground text-xs'>
+                              {t('Click a model to configure pricing')}
+                            </span>
+                          )}
                           <div className='flex flex-wrap gap-2'>
                             <Button
                               type='button'
@@ -3436,6 +3451,14 @@ export function ChannelMutateDrawer({
         }}
         detailItems={statusCodeRiskDetailItems}
         onConfirm={() => handleStatusCodeRiskAction(true)}
+      />
+
+      <ModelPricingSheet
+        open={pricingOpen}
+        onOpenChange={setPricingOpen}
+        editData={pricingModel}
+        onSave={(data) => void handlePricingSave(data)}
+        onCancel={() => setPricingOpen(false)}
       />
     </>
   )

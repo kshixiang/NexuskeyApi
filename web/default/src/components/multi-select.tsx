@@ -35,6 +35,8 @@ interface MultiSelectProps {
   onChange: (values: string[]) => void
   placeholder?: string
   className?: string
+  /** When set, clicking a selected item label opens an action (e.g. model pricing). */
+  onItemClick?: (value: string) => void
 }
 
 export function MultiSelect({
@@ -43,6 +45,7 @@ export function MultiSelect({
   onChange,
   placeholder,
   className,
+  onItemClick,
 }: MultiSelectProps) {
   const { t } = useTranslation()
   const resolvedPlaceholder = placeholder ?? t('Select items...')
@@ -81,14 +84,34 @@ export function MultiSelect({
         <div className='flex flex-wrap gap-1'>
           {selected.map((value) => {
             const option = options.find((o) => o.value === value)
+            const label = option?.label || value
             return (
-              <Badge key={value} variant='secondary'>
-                {option?.label || value}
+              <Badge key={value} variant='secondary' className='gap-0.5 pr-0.5'>
+                {onItemClick ? (
+                  <button
+                    type='button'
+                    className='hover:text-primary max-w-[12rem] truncate text-left hover:underline'
+                    title={t('Set pricing')}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onItemClick(value)
+                    }}
+                  >
+                    {label}
+                  </button>
+                ) : (
+                  <span className='max-w-[12rem] truncate'>{label}</span>
+                )}
                 <Button
                   variant='ghost'
                   size='icon-sm'
                   aria-label='Remove'
-                  className='ml-1 size-auto p-0'
+                  className='ml-0.5 size-auto p-0'
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       handleUnselect(value)
