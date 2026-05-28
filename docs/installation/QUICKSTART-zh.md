@@ -193,6 +193,7 @@ docker inspect new-api --format '{{.Config.Image}}'
 
 | 现象 | 处理 |
 |------|------|
+| 页面显示 **classic theme not built** | 部署时跳过了 classic 前端，但数据库仍选 classic。执行：`./scripts/deploy.sh fix-theme --dir /www/wwwroot/nexuskey-api`，然后浏览器 Ctrl+F5。或在管理后台把「前端主题」改为 **新版前端（default）**。若必须用 classic UI：`update --with-classic` 重新构建（更慢） |
 | 域名 502 | `status` 看容器是否运行；反代是否指向 `127.0.0.1:3000` |
 | IP:3000 能开，域名不行 | 检查 DNS、SSL、反代配置 |
 | 登录后会话失效 | 检查 `.env` 中 `SESSION_SECRET` 是否为空或被改过 |

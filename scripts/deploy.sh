@@ -34,6 +34,7 @@ Commands:
   stop      Stop all containers (keeps data/DB volumes)
   update    Rebuild from repo (if applicable) and restart
   redeploy  stop + update (switch from upstream image to your code)
+  fix-theme Switch DB theme to default (fixes "classic theme not built")
   logs      Follow new-api container logs (use: logs --service postgres|redis)
   backup    Archive data/, logs/, and .env from deploy directory (prod: metadata only)
 
@@ -469,6 +470,7 @@ Next steps:
    proxy_buffering off; proxy_read_timeout 300s;
 3. Backup: ./scripts/deploy.sh backup --dir ${DEPLOY_DIR}
 4. Do NOT expose 5432/6379 publicly; DB/Redis are internal to Docker network only
+5. If the page shows "classic theme not built": ./scripts/deploy.sh fix-theme --dir ${DEPLOY_DIR}
 
 Docs: docs/installation/deploy-tool.md
 EOF
@@ -516,6 +518,43 @@ cmd_stop() {
   log "Stopping containers (database data is preserved) ..."
   docker_compose down
   log "Stopped."
+}
+
+cmd_fix_theme() {
+  require_docker
+  resolve_deploy_dir
+  load_deploy_mode
+  ensure_env_file
+  local sql="INSERT INTO options (key, value) VALUES ('theme.frontend', 'default') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;"
+  log "Setting theme.frontend=default (new UI from web/default) ..."
+  if [ "${MODE}" = "simple" ]; then
+    local db="${DEPLOY_DIR}/data/new-api.db"
+    if [ ! -f "${db}" ]; then
+      err "SQLite database not found: ${db}"
+      exit 1
+    fi
+    if command -v sqlite3 >/dev/null 2>&1; then
+      sqlite3 "${db}" "INSERT OR REPLACE INTO options (key, value) VALUES ('theme.frontend', 'default');"
+    else
+      docker run --rm -v "${DEPLOY_DIR}/data:/data" nouchka/sqlite3 \
+        sqlite3 /data/new-api.db "INSERT OR REPLACE INTO options (key, value) VALUES ('theme.frontend', 'default');"
+    fi
+  else
+    local pg_user pg_db
+    pg_user="$(read_env_var POSTGRES_USER || echo newapi)"
+    pg_db="$(read_env_var POSTGRES_DB || echo newapi)"
+    if ! docker exec new-api-postgres psql -U "${pg_user}" -d "${pg_db}" -c "${sql}"; then
+      err "Could not update theme. Is postgres container running?"
+      exit 1
+    fi
+  fi
+  log "Restarting new-api ..."
+  if docker ps -q -f name=^new-api$ | grep -q .; then
+    docker restart new-api
+  else
+    docker_compose restart new-api
+  fi
+  log "Done. Open the site and hard-refresh (Ctrl+F5)."
 }
 
 cmd_update() {
@@ -576,6 +615,7 @@ case "${CMD}" in
   stop) parse_args "$@"; cmd_stop ;;
   update) parse_args "$@"; cmd_update ;;
   redeploy) parse_args "$@"; cmd_redeploy ;;
+  fix-theme) parse_args "$@"; cmd_fix_theme ;;
   logs) parse_args "$@"; cmd_logs ;;
   backup) parse_args "$@"; cmd_backup ;;
   -h | --help | help)
