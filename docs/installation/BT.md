@@ -56,6 +56,17 @@ chmod +x scripts/deploy.sh
 
 详细说明见 [deploy-tool.md](./deploy-tool.md)。
 
+**改完代码后更新线上**（在仓库目录执行）：
+
+```bash
+cd /path/to/NexuskeyApi
+git pull
+./scripts/deploy.sh backup --dir /www/wwwroot/nexuskey-api   # 可选
+./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
+```
+
+会从本仓库重新构建 `nexuskey-api:local` 并重启，数据库数据保留。完整流程见 [deploy-tool.md — 代码更新](./deploy-tool.md)。
+
 ### 方法二：使用宝塔应用商店
 
 1. 在宝塔面板 Docker 功能中，点击 **应用商店**
@@ -146,13 +157,24 @@ volumes:
 
 ### Q4：如何更新版本？
 
-```bash
-# 拉取最新镜像
-docker pull calciumion/new-api:latest
+**若使用本仓库 `scripts/deploy.sh` 部署（推荐）：**
 
-# 重启容器
-docker-compose down && docker-compose up -d
+```bash
+cd /path/to/NexuskeyApi
+git pull
+./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
 ```
+
+会重新构建包含你修改代码的镜像，而不是拉取官方 `calciumion/new-api`。详见 [deploy-tool.md](./deploy-tool.md)。
+
+**若使用宝塔应用商店 / 官方镜像：**
+
+```bash
+docker pull calciumion/new-api:latest
+docker compose down && docker compose up -d
+```
+
+注意：上述方式**不会**包含你在本仓库 `web/default` 或 Go 源码中的自定义修改。
 
 ***
 

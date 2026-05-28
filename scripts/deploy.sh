@@ -57,6 +57,8 @@ Examples:
   ./scripts/deploy.sh install --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh stop --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
+  ./scripts/deploy.sh fix-theme --dir /www/wwwroot/nexuskey-api
+  ./scripts/deploy.sh redeploy --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh install --upstream --dir /www/wwwroot/nexuskey-api
   ./scripts/deploy.sh install --simple --dir /tmp/nexuskey-trial
   ./scripts/deploy.sh status --dir /www/wwwroot/nexuskey-api

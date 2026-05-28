@@ -79,7 +79,10 @@ export function CopyChannelDialog({
         <DialogHeader>
           <DialogTitle>{t('Copy Channel')}</DialogTitle>
           <DialogDescription>
-            {t('Create a copy of:')} <strong>{currentRow.name}</strong>
+            {t('Create a copy of:')} <strong>{currentRow.name}</strong>.{' '}
+            {t(
+              'Models, groups, and mappings are copied. You must enter a new API key for the duplicate channel.'
+            )}
           </DialogDescription>
         </DialogHeader>
 

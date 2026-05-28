@@ -28,6 +28,7 @@ import type { Channel } from '../types'
 // ============================================================================
 
 type DialogType =
+  | 'quick-add-channel'
   | 'create-channel'
   | 'update-channel'
   | 'test-channel'

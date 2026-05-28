@@ -27,12 +27,19 @@ import { OllamaModelsDialog } from './dialogs/ollama-models-dialog'
 import { TagBatchEditDialog } from './dialogs/tag-batch-edit-dialog'
 import { UpstreamUpdateDialog } from './dialogs/upstream-update-dialog'
 import { ChannelMutateDrawer } from './drawers/channel-mutate-drawer'
+import { ChannelQuickAddDialog } from './quick-add/channel-quick-add-dialog'
 
 export function ChannelsDialogs() {
   const { open, setOpen, currentRow, upstream } = useChannels()
 
   return (
     <>
+      <ChannelQuickAddDialog
+        open={open === 'quick-add-channel'}
+        onOpenChange={(v) => !v && setOpen(null)}
+        onOpenFullForm={() => setOpen('create-channel')}
+      />
+
       {/* Channel Create/Update Drawer */}
       <ChannelMutateDrawer
         open={open === 'create-channel' || open === 'update-channel'}

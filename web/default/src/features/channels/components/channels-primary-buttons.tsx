@@ -103,11 +103,19 @@ export function ChannelsPrimaryButtons() {
           />
         </div>
 
-        {/* Create Channel */}
-        <Button onClick={() => setOpen('create-channel')} size='sm'>
+        <Button onClick={() => setOpen('quick-add-channel')} size='sm'>
           <Plus className='h-4 w-4' />
-          <span className='max-sm:hidden'>{t('Create Channel')}</span>
-          <span className='sm:hidden'>{t('Create')}</span>
+          <span className='max-sm:hidden'>{t('Quick Add Channel')}</span>
+          <span className='sm:hidden'>{t('Quick Add')}</span>
+        </Button>
+
+        <Button
+          onClick={() => setOpen('create-channel')}
+          size='sm'
+          variant='outline'
+        >
+          <span className='max-sm:hidden'>{t('Full form')}</span>
+          <span className='sm:hidden'>{t('Full')}</span>
         </Button>
 
         {/* More Actions */}

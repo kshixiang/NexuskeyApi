@@ -120,15 +120,23 @@ cd /www/wwwroot/NexuskeyApi
 # 状态
 ./scripts/deploy.sh status --dir /www/wwwroot/nexuskey-api
 
-# 更新镜像并重启
+# 改代码后更新线上（见第八节）
 ./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
+
+# 停止服务（数据保留）
+./scripts/deploy.sh stop --dir /www/wwwroot/nexuskey-api
 
 # 看日志
 ./scripts/deploy.sh logs --dir /www/wwwroot/nexuskey-api
 
 # 备份 data + .env
 ./scripts/deploy.sh backup --dir /www/wwwroot/nexuskey-api
+
+# 修复 classic theme not built
+./scripts/deploy.sh fix-theme --dir /www/wwwroot/nexuskey-api
 ```
+
+完整命令与参数见 [deploy-tool.md](./deploy-tool.md)。
 
 ---
 
@@ -162,30 +170,80 @@ docker inspect new-api --format '{{.Config.Image}}'
 
 ## 八、改了代码后如何更新线上？
 
+日常发布按下面做即可（详细说明见 [deploy-tool.md#代码更新](./deploy-tool.md)）。
+
+### 标准流程（最常用）
+
 ```bash
+# 在 Git 仓库目录执行（注意：不是 nexuskey-api 部署目录）
 cd /www/wwwroot/NexuskeyApi
-git pull origin <你的分支>
+
+git pull
+# 或：git pull origin main
+
+# 可选：更新前备份
+./scripts/deploy.sh backup --dir /www/wwwroot/nexuskey-api
+
+# 重新构建并重启（约 5–15 分钟，数据库数据不丢）
 ./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api
 ```
 
-`update` 在仓库目录下会**自动重新构建** `nexuskey-api:local` 并重启容器（无需再手写 `--build`）。
+浏览器 **Ctrl+F5** 强刷。
 
-验证跑的是你的代码：
+### 本机开发 → 服务器发布
+
+```text
+本机修改代码 → git push → 服务器 git pull → deploy.sh update
+```
+
+- **仓库目录**（放源码）：如 `/www/wwwroot/NexuskeyApi`
+- **部署目录**（放 `.env`、`data/`）：如 `/www/wwwroot/nexuskey-api`
+- `update` 从仓库构建镜像，在部署目录启动容器
+
+### `update` 会做什么
+
+1. 检测仓库有 `Dockerfile` 时，自动构建 **`nexuskey-api:local`**（你的 Go + `web/default`）
+2. 默认**不**构建 `web/classic`（加快速度）
+3. 写入 `DEPLOY_IMAGE=nexuskey-api:local` 到部署目录 `.env`
+4. 强制重建并启动容器（PostgreSQL / Redis 卷保留）
+
+无需手写 `--build`；**不要**加 `--upstream`（那是官方未改代码的镜像）。
+
+### 什么要 update、什么不用
+
+| 修改内容 | 是否需要 `update` |
+|----------|-------------------|
+| `web/default/` 页面、样式、前端 | **需要** |
+| Go 后端 `.go` 文件 | **需要** |
+| `Dockerfile` / 部署脚本 | **需要**（先 `git pull`） |
+| 管理后台渠道、模型、用户、比例等 | **不需要**（在数据库里） |
+| 只改部署目录 `.env` | 改完后 `update` 或重启容器 |
+
+### 更新后自检
 
 ```bash
+./scripts/deploy.sh status --dir /www/wwwroot/nexuskey-api
+
 grep DEPLOY_IMAGE /www/wwwroot/nexuskey-api/.env
 docker inspect new-api --format '{{.Config.Image}}'
 ```
 
-必须是 **`nexuskey-api:local`**。若是 `calciumion/new-api:latest`，说明用了 `--upstream` 或旧部署，请去掉 `--upstream` 再执行 `update`。
+必须是 **`nexuskey-api:local`**。若是 `calciumion/new-api:latest`，执行：
 
-| 修改位置 | 是否需重新构建 |
-|----------|----------------|
-| `web/default/` 页面、样式 | 是（已包含在自动构建里） |
-| Go 后端 `.go` 文件 | 是 |
-| 管理后台里渠道/模型配置 | 否（在数据库里） |
+```bash
+./scripts/deploy.sh redeploy --dir /www/wwwroot/nexuskey-api
+```
 
-浏览器 **Ctrl+F5** 强刷。构建失败时先 `git pull` 拿最新 `Dockerfile`，再把报错末尾发运维。
+### 其他命令
+
+| 场景 | 命令 |
+|------|------|
+| 也改了 `web/classic` 老界面 | `update ... --with-classic` |
+| 页面 `classic theme not built` | `fix-theme --dir /www/wwwroot/nexuskey-api` |
+| 构建失败查日志 | `logs --dir /www/wwwroot/nexuskey-api` |
+| 仅停止服务 | `stop --dir /www/wwwroot/nexuskey-api` |
+
+构建失败时先 `git pull` 同步最新 `Dockerfile`，查看 `logs` 或构建终端最后几十行报错。
 
 ---
 
