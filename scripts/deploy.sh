@@ -18,6 +18,7 @@ HTTP_PORT="3000"
 MODE="prod"
 MODE_EXPLICIT=0
 BUILD_FROM_SOURCE=0
+SKIP_CLASSIC=0
 LOCAL_IMAGE_TAG="nexuskey-api:local"
 LOG_SERVICE=""
 
@@ -38,6 +39,7 @@ Options:
   --mode MODE      prod (default) | simple
   --simple         Shorthand for --mode simple (SQLite, not for production)
   --build          Build Docker image from this repo (required for your code/UI changes)
+  --skip-classic   Skip web/classic build (faster; site uses default theme only)
   -h, --help       Show this help
 
 Environment:
@@ -85,6 +87,10 @@ parse_args() {
         ;;
       --build)
         BUILD_FROM_SOURCE=1
+        shift
+        ;;
+      --skip-classic)
+        SKIP_CLASSIC=1
         shift
         ;;
       --service)
@@ -326,7 +332,12 @@ build_local_image() {
   fi
   log "Building image ${LOCAL_IMAGE_TAG} from repository source ..."
   log "Includes frontend (web/default) + backend — may take 5–15 minutes."
-  docker build -t "${LOCAL_IMAGE_TAG}" -f "${REPO_ROOT}/Dockerfile" "${REPO_ROOT}"
+  local -a build_args=()
+  if [ "${SKIP_CLASSIC}" -eq 1 ]; then
+    build_args+=(--build-arg "BUILD_CLASSIC_THEME=0")
+    log "BUILD_CLASSIC_THEME=0 (classic theme skipped; use default in admin)"
+  fi
+  docker build "${build_args[@]}" -t "${LOCAL_IMAGE_TAG}" -f "${REPO_ROOT}/Dockerfile" "${REPO_ROOT}"
   set_env_var DEPLOY_IMAGE "${LOCAL_IMAGE_TAG}"
   log "Set DEPLOY_IMAGE=${LOCAL_IMAGE_TAG} in ${DEPLOY_DIR}/.env"
 }

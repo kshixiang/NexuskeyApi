@@ -145,6 +145,12 @@ git pull                    # 拉取你改过的分支
 ./scripts/deploy.sh update --build --dir /www/wwwroot/nexuskey-api
 ```
 
+若 classic 主题构建报错（`vite` / `cli.js`），且后台只用 **default** 主题，可加 `--skip-classic`：
+
+```bash
+./scripts/deploy.sh update --build --skip-classic --dir /www/wwwroot/nexuskey-api
+```
+
 首次若一直用的官方镜像，执行一次带 `--build` 的 install/update 即可。构建约 5–15 分钟（含前端编译）。
 
 验证当前用的镜像：
