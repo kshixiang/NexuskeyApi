@@ -193,7 +193,7 @@ export function ChannelUpstreamModelsPanel({
           ) : (
             <RefreshCw className='h-4 w-4' />
           )}
-          {t('Fetch from upstream')}
+          {t('Fetch from Upstream')}
         </Button>
         <div className='relative min-w-[12rem] flex-1'>
           <Search className='text-muted-foreground absolute top-2.5 left-2.5 h-4 w-4' />

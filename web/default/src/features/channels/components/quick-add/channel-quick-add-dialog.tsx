@@ -18,10 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ClipboardPaste, Loader2 } from 'lucide-react'
+import { AlertTriangle, ClipboardPaste, DollarSign, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -42,14 +43,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
+import { cn } from '@/lib/utils'
 import { useSystemOptions } from '@/features/system-settings/hooks/use-system-options'
+import { useUpdateOption } from '@/features/system-settings/hooks/use-update-option'
 import {
   emptyModelPricingSnapshot,
+  loadModelPricingData,
+  mergeModelPricingData,
   modelHasPricing,
   snapshotFromOptionRecords,
   type ModelPricingOptionsSnapshot,
 } from '@/features/system-settings/models/model-pricing-persist'
+import {
+  ModelPricingSheet,
+  type ModelRatioData,
+} from '@/features/system-settings/models/model-pricing-sheet'
 import { createChannel, getChannels, getGroups } from '../../api'
 import { CHANNEL_TYPE_OPTIONS, SUCCESS_MESSAGES } from '../../constants'
 import { channelsQueryKeys } from '../../lib/channel-actions'
@@ -104,6 +114,7 @@ export function ChannelQuickAddDialog({
 }: ChannelQuickAddDialogProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const updateOption = useUpdateOption()
   const { data: systemOptions } = useSystemOptions()
 
   const [step, setStep] = useState<QuickAddStep>('source')
@@ -116,6 +127,9 @@ export function ChannelQuickAddDialog({
   const [pricingSnapshot, setPricingSnapshot] =
     useState<ModelPricingOptionsSnapshot>(emptyModelPricingSnapshot())
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [reviewPricingOpen, setReviewPricingOpen] = useState(false)
+  const [reviewPricingModel, setReviewPricingModel] =
+    useState<ModelRatioData | null>(null)
 
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
     queryKey: ['groups'],
@@ -165,11 +179,51 @@ export function ChannelQuickAddDialog({
     return pricingSnapshot
   }, [pricingSnapshot, systemOptions?.data])
 
+  const selectedModels = useMemo(
+    () => parseModels(formValues.models),
+    [formValues.models]
+  )
+
   const unpricedModels = useMemo(() => {
-    return parseModels(formValues.models).filter(
+    return selectedModels.filter(
       (m) => !modelHasPricing(m, effectivePricingSnapshot)
     )
-  }, [effectivePricingSnapshot, formValues.models])
+  }, [effectivePricingSnapshot, selectedModels])
+
+  const openReviewPricing = useCallback(
+    (modelName: string) => {
+      setReviewPricingModel(
+        loadModelPricingData(modelName, effectivePricingSnapshot)
+      )
+      setReviewPricingOpen(true)
+    },
+    [effectivePricingSnapshot]
+  )
+
+  const handleReviewPricingSave = useCallback(
+    async (data: ModelRatioData) => {
+      const { snapshot: nextSnapshot, updates } = mergeModelPricingData(
+        effectivePricingSnapshot,
+        data
+      )
+      if (updates.length === 0) {
+        setReviewPricingOpen(false)
+        return
+      }
+      try {
+        for (const update of updates) {
+          await updateOption.mutateAsync(update)
+        }
+        setPricingSnapshot(nextSnapshot)
+        await queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        toast.success(t('Setting updated successfully'))
+        setReviewPricingOpen(false)
+      } catch (error: unknown) {
+        toast.error(getErrorMessage(error) || t('Failed to update setting'))
+      }
+    },
+    [effectivePricingSnapshot, queryClient, t, updateOption]
+  )
 
   const resetState = useCallback(() => {
     setStep('source')
@@ -312,7 +366,12 @@ export function ChannelQuickAddDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-xl'>
+      <DialogContent
+        className={cn(
+          'max-h-[90vh] overflow-y-auto',
+          step === 'review' ? 'sm:max-w-2xl' : 'sm:max-w-xl'
+        )}
+      >
         <DialogHeader>
           <DialogTitle>{stepTitle}</DialogTitle>
           <DialogDescription>
@@ -502,47 +561,146 @@ export function ChannelQuickAddDialog({
         )}
 
         {step === 'review' && (
-          <div className='space-y-4 py-2'>
-            <dl className='grid gap-2 text-sm'>
-              <div className='flex justify-between gap-4'>
-                <dt className='text-muted-foreground'>{t('Name')}</dt>
-                <dd className='text-right font-medium'>{formValues.name}</dd>
+          <div className='space-y-5 py-1'>
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <section className='bg-card space-y-3 rounded-lg border p-4'>
+                <h3 className='text-sm font-semibold'>{t('Channel details')}</h3>
+                <dl className='space-y-2.5 text-sm'>
+                  <div className='flex items-start justify-between gap-3'>
+                    <dt className='text-muted-foreground shrink-0'>
+                      {t('Name')}
+                    </dt>
+                    <dd className='text-right font-medium break-all'>
+                      {formValues.name || '—'}
+                    </dd>
+                  </div>
+                  <div className='flex items-start justify-between gap-3'>
+                    <dt className='text-muted-foreground shrink-0'>
+                      {t('Type')}
+                    </dt>
+                    <dd className='text-right font-medium'>
+                      {t(
+                        CHANNEL_TYPE_OPTIONS.find(
+                          (o) => o.value === formValues.type
+                        )?.label ?? String(formValues.type)
+                      )}
+                    </dd>
+                  </div>
+                  <div className='flex items-start justify-between gap-3'>
+                    <dt className='text-muted-foreground shrink-0'>
+                      {t('Groups')}
+                    </dt>
+                    <dd className='text-right font-medium break-all'>
+                      {formatModels(formValues.group) || '—'}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className='bg-card space-y-3 rounded-lg border p-4'>
+                <h3 className='text-sm font-semibold'>{t('Credentials')}</h3>
+                <dl className='space-y-2.5 text-sm'>
+                  <div className='flex items-start justify-between gap-3'>
+                    <dt className='text-muted-foreground shrink-0'>
+                      {t('API Key *')}
+                    </dt>
+                    <dd className='text-right font-medium'>
+                      {formValues.key?.trim()
+                        ? t('API key configured')
+                        : '—'}
+                    </dd>
+                  </div>
+                  <div className='flex items-start justify-between gap-3'>
+                    <dt className='text-muted-foreground shrink-0'>
+                      {t('Base URL')}
+                    </dt>
+                    <dd className='text-right font-medium break-all'>
+                      {formValues.base_url?.trim() || '—'}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+
+            <section className='bg-card space-y-3 rounded-lg border p-4'>
+              <div className='flex flex-wrap items-center justify-between gap-2'>
+                <h3 className='text-sm font-semibold'>
+                  {t('Selected models')} ({selectedModels.length})
+                </h3>
+                <p className='text-muted-foreground text-xs'>
+                  {t('Click a model to configure pricing')}
+                </p>
               </div>
-              <div className='flex justify-between gap-4'>
-                <dt className='text-muted-foreground'>{t('Type')}</dt>
-                <dd className='text-right font-medium'>
-                  {t(
-                    CHANNEL_TYPE_OPTIONS.find((o) => o.value === formValues.type)
-                      ?.label ?? String(formValues.type)
-                  )}
-                </dd>
-              </div>
-              <div className='flex justify-between gap-4'>
-                <dt className='text-muted-foreground'>{t('Models')}</dt>
-                <dd className='max-w-[60%] truncate text-right font-medium'>
-                  {formValues.models}
-                </dd>
-              </div>
-              <div className='flex justify-between gap-4'>
-                <dt className='text-muted-foreground'>{t('Groups')}</dt>
-                <dd className='text-right font-medium'>
-                  {formatModels(formValues.group)}
-                </dd>
-              </div>
-            </dl>
+
+              {selectedModels.length > 0 ? (
+                <ScrollArea className='h-[min(280px,42vh)] rounded-md border'>
+                  <div className='flex flex-wrap gap-2 p-3'>
+                    {selectedModels.map((model) => {
+                      const priced = modelHasPricing(
+                        model,
+                        effectivePricingSnapshot
+                      )
+                      return (
+                        <button
+                          key={model}
+                          type='button'
+                          onClick={() => openReviewPricing(model)}
+                          className={cn(
+                            'hover:bg-muted/80 inline-flex max-w-full items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left text-sm transition-colors',
+                            !priced && 'border-amber-500/50 bg-amber-500/5'
+                          )}
+                        >
+                          <span className='truncate font-medium'>{model}</span>
+                          <Badge
+                            variant={priced ? 'secondary' : 'outline'}
+                            className='shrink-0 text-xs'
+                          >
+                            {priced ? t('Priced') : t('Unset price')}
+                          </Badge>
+                          <DollarSign className='text-muted-foreground h-3.5 w-3.5 shrink-0' />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <p className='text-muted-foreground text-sm'>—</p>
+              )}
+            </section>
+
             {unpricedModels.length > 0 && (
               <Alert variant='destructive'>
                 <AlertTriangle className='h-4 w-4' />
-                <AlertDescription>
-                  {t(
-                    '{{count}} model(s) have no pricing configured yet. You can still create the channel.',
-                    { count: unpricedModels.length }
-                  )}
-                  : {unpricedModels.slice(0, 5).join(', ')}
-                  {unpricedModels.length > 5 ? '…' : ''}
+                <AlertDescription className='space-y-2'>
+                  <p>
+                    {t(
+                      '{{count}} model(s) have no pricing configured yet. You can still create the channel.',
+                      { count: unpricedModels.length }
+                    )}
+                  </p>
+                  <div className='flex flex-wrap gap-1.5'>
+                    {unpricedModels.map((model) => (
+                      <button
+                        key={model}
+                        type='button'
+                        onClick={() => openReviewPricing(model)}
+                        className='hover:bg-destructive/20 rounded border border-current/30 px-2 py-0.5 text-xs underline-offset-2 hover:underline'
+                      >
+                        {model}
+                      </button>
+                    ))}
+                  </div>
                 </AlertDescription>
               </Alert>
             )}
+
+            <ModelPricingSheet
+              open={reviewPricingOpen}
+              onOpenChange={setReviewPricingOpen}
+              editData={reviewPricingModel}
+              onSave={(data) => void handleReviewPricingSave(data)}
+              onCancel={() => setReviewPricingOpen(false)}
+            />
           </div>
         )}
 

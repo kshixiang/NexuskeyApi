@@ -1,3 +1,10 @@
 {
-  "Each tier supports up to 2 conditions. The last tier without conditions is the fallback.": "Each tier supports up to 2 conditions. The last tier without conditions is the fallback."
+  "Click a model to configure pricing": "Click a model to configure pricing",
+  "Each tier supports up to 2 conditions. The last tier without conditions is the fallback.": "Each tier supports up to 2 conditions. The last tier without conditions is the fallback.",
+  "Failed to read clipboard": "Failed to read clipboard",
+  "Fetch models from upstream, then click a model to set pricing.": "Fetch models from upstream, then click a model to set pricing.",
+  "Models and pricing": "Models and pricing",
+  "Models, groups, and mappings are copied. You must enter a new API key for the duplicate channel.": "Models, groups, and mappings are copied. You must enter a new API key for the duplicate channel.",
+  "Review and create": "Review and create",
+  "{{count}} model(s) have no pricing configured yet. You can still create the channel.": "{{count}} model(s) have no pricing configured yet. You can still create the channel."
 }
