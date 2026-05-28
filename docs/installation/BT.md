@@ -12,7 +12,7 @@
 | ----- | ---------------------------------- |
 | 宝塔面板  | ≥ 9.2.0 版本                         |
 | 推荐系统  | CentOS 7+、Ubuntu 18.04+、Debian 10+ |
-| 服务器配置 | 至少 1 核 2G 内存                       |
+| 服务器配置 | 生产建议 ≥ 2 核 4G；试用简易模式 ≥ 1 核 2G   |
 
 ***
 
@@ -34,7 +34,29 @@
 
 ## 步骤三：安装 New API
 
-### 方法一：使用宝塔应用商店（推荐）
+### 方法一：使用仓库部署脚本（推荐，生产环境）
+
+若已 clone 本仓库，可在宝塔 **终端** 中一键部署 **new-api + PostgreSQL + Redis**（默认正式上线模式）：
+
+```bash
+cd /path/to/NexuskeyApi
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh install
+# 自定义部署目录与端口：
+# ./scripts/deploy.sh install --dir /www/wwwroot/nexuskey-api --port 3000
+```
+
+脚本会自动生成 `SESSION_SECRET`、`CRYPTO_SECRET`、数据库与 Redis 密码，创建 `data/`、`logs/`、`.env`，并输出防火墙与反向代理检查项。
+
+仅试用（SQLite 单容器，**勿用于生产**）：
+
+```bash
+./scripts/deploy.sh install --simple --dir /tmp/nexuskey-trial
+```
+
+详细说明见 [deploy-tool.md](./deploy-tool.md)。
+
+### 方法二：使用宝塔应用商店
 
 1. 在宝塔面板 Docker 功能中，点击 **应用商店**
 2. 搜索并找到 **New-API**
@@ -48,7 +70,7 @@
 5. 点击 **确认** 开始安装
 6. 等待安装完成后，访问 `http://您的服务器IP:3000` 即可使用
 
-### 方法二：使用 Docker Compose
+### 方法三：使用 Docker Compose
 
 1. 在宝塔面板中创建网站目录，如 `/www/wwwroot/new-api`
 2. 创建 `docker-compose.yml` 文件：
@@ -136,6 +158,7 @@ docker-compose down && docker-compose up -d
 
 ## 相关链接
 
+- [仓库部署脚本说明](./deploy-tool.md)
 - [官方文档](https://docs.newapi.pro/zh/docs/installation)
 - [环境变量配置](https://docs.newapi.pro/zh/docs/installation/config-maintenance/environment-variables)
 - [常见问题](https://docs.newapi.pro/zh/docs/support/faq)

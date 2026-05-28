@@ -1,0 +1,25 @@
+# Single-container deployment (SQLite via /data volume).
+# Used by scripts/deploy.sh --simple (trial only). Production: docker-compose.prod.yml
+# For full stack (new-api + PostgreSQL + Redis), use the root docker-compose.yml.
+
+services:
+  new-api:
+    image: calciumion/new-api:latest
+    container_name: new-api
+    restart: always
+    command: --log-dir /app/logs
+    ports:
+      - "${HTTP_PORT:-3000}:3000"
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    environment:
+      - SESSION_SECRET=${SESSION_SECRET}
+      - TZ=${TZ:-Asia/Shanghai}
+      - ERROR_LOG_ENABLED=${ERROR_LOG_ENABLED:-true}
+      - BATCH_UPDATE_ENABLED=${BATCH_UPDATE_ENABLED:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
