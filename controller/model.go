@@ -109,7 +109,7 @@ func init() {
 	})
 }
 
-func ListModels(c *gin.Context, modelType int) {
+func buildUserOpenAIModels(c *gin.Context) ([]dto.OpenAIModels, error) {
 	userOpenAiModels := make([]dto.OpenAIModels, 0)
 
 	acceptUnsetRatioModel := operation_setting.SelfUseModeEnabled
@@ -132,7 +132,7 @@ func ListModels(c *gin.Context, modelType int) {
 		} else {
 			tokenModelLimit = map[string]bool{}
 		}
-		for allowModel, _ := range tokenModelLimit {
+		for allowModel := range tokenModelLimit {
 			if !acceptUnsetRatioModel {
 				if !helper.HasModelBillingConfig(allowModel) {
 					continue
@@ -151,53 +151,74 @@ func ListModels(c *gin.Context, modelType int) {
 				})
 			}
 		}
+		return userOpenAiModels, nil
+	}
+
+	userId := c.GetInt("id")
+	userGroup, err := model.GetUserGroup(userId, false)
+	if err != nil {
+		return nil, err
+	}
+	group := userGroup
+	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+	if tokenGroup != "" {
+		group = tokenGroup
+	}
+	var models []string
+	if tokenGroup == "auto" {
+		for _, autoGroup := range service.GetUserAutoGroup(userGroup) {
+			groupModels := model.GetGroupEnabledModels(autoGroup)
+			for _, g := range groupModels {
+				if !common.StringsContains(models, g) {
+					models = append(models, g)
+				}
+			}
+		}
 	} else {
-		userId := c.GetInt("id")
-		userGroup, err := model.GetUserGroup(userId, false)
-		if err != nil {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "get user group failed",
-			})
-			return
-		}
-		group := userGroup
-		tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
-		if tokenGroup != "" {
-			group = tokenGroup
-		}
-		var models []string
-		if tokenGroup == "auto" {
-			for _, autoGroup := range service.GetUserAutoGroup(userGroup) {
-				groupModels := model.GetGroupEnabledModels(autoGroup)
-				for _, g := range groupModels {
-					if !common.StringsContains(models, g) {
-						models = append(models, g)
-					}
-				}
+		models = model.GetGroupEnabledModels(group)
+	}
+	for _, modelName := range models {
+		if !acceptUnsetRatioModel {
+			if !helper.HasModelBillingConfig(modelName) {
+				continue
 			}
+		}
+		if oaiModel, ok := openAIModelsMap[modelName]; ok {
+			oaiModel.SupportedEndpointTypes = model.GetModelSupportEndpointTypes(modelName)
+			userOpenAiModels = append(userOpenAiModels, oaiModel)
 		} else {
-			models = model.GetGroupEnabledModels(group)
+			userOpenAiModels = append(userOpenAiModels, dto.OpenAIModels{
+				Id:                     modelName,
+				Object:                 "model",
+				Created:                1626777600,
+				OwnedBy:                "custom",
+				SupportedEndpointTypes: model.GetModelSupportEndpointTypes(modelName),
+			})
 		}
-		for _, modelName := range models {
-			if !acceptUnsetRatioModel {
-				if !helper.HasModelBillingConfig(modelName) {
-					continue
-				}
-			}
-			if oaiModel, ok := openAIModelsMap[modelName]; ok {
-				oaiModel.SupportedEndpointTypes = model.GetModelSupportEndpointTypes(modelName)
-				userOpenAiModels = append(userOpenAiModels, oaiModel)
-			} else {
-				userOpenAiModels = append(userOpenAiModels, dto.OpenAIModels{
-					Id:                     modelName,
-					Object:                 "model",
-					Created:                1626777600,
-					OwnedBy:                "custom",
-					SupportedEndpointTypes: model.GetModelSupportEndpointTypes(modelName),
-				})
-			}
-		}
+	}
+	return userOpenAiModels, nil
+}
+
+func buildTokenModelNames(c *gin.Context) ([]string, error) {
+	userOpenAiModels, err := buildUserOpenAIModels(c)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(userOpenAiModels))
+	for i, m := range userOpenAiModels {
+		names[i] = m.Id
+	}
+	return names, nil
+}
+
+func ListModels(c *gin.Context, modelType int) {
+	userOpenAiModels, err := buildUserOpenAIModels(c)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "get user group failed",
+		})
+		return
 	}
 
 	switch modelType {
