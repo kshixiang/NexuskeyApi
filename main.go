@@ -97,10 +97,6 @@ func main() {
 		go model.SyncChannelCache(common.SyncFrequency)
 	}
 
-	if err := service.RegenerateModelsTreeFile(); err != nil {
-		common.SysLog("initial models tree generation failed: " + err.Error())
-	}
-
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 
@@ -332,6 +328,12 @@ func InitResources() error {
 	if err != nil {
 		common.SysError("failed to load custom OAuth providers: " + err.Error())
 		// Don't return error, custom OAuth is not critical
+	}
+
+	if err := service.RegenerateModelsTreeFile(); err != nil {
+		common.SysLog("models tree file update failed at startup: " + err.Error())
+	} else {
+		common.SysLog("models tree file updated at startup: " + service.ModelsTreeFilePath())
 	}
 
 	return nil
