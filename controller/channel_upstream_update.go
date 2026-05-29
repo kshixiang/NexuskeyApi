@@ -418,6 +418,7 @@ func refreshChannelRuntimeCache() {
 		}()
 	}
 	service.ResetProxyClientCache()
+	notifyModelsTreeChanged()
 }
 
 func shouldSendUpstreamModelUpdateNotification(now int64, changedChannels int, failedChannels int) bool {

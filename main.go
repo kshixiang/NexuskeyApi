@@ -97,6 +97,10 @@ func main() {
 		go model.SyncChannelCache(common.SyncFrequency)
 	}
 
+	if err := service.RegenerateModelsTreeFile(); err != nil {
+		common.SysLog("initial models tree generation failed: " + err.Error())
+	}
+
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 
