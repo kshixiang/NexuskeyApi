@@ -441,6 +441,44 @@ For commercial licensing, please contact support@quantumnous.com
   animation: landing-fade-right 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes landing-cursor-promo-glow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes landing-cursor-promo-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.landing-cursor-promo-glow {
+  animation: landing-cursor-promo-glow 3.2s ease-in-out infinite;
+}
+
+.landing-cursor-promo-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    oklch(1 0 0 / 0.14) 50%,
+    transparent 65%
+  );
+  animation: landing-cursor-promo-shimmer 2.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-animate-fade-up,
   .landing-animate-fade-in,
@@ -450,6 +488,11 @@ For commercial licensing, please contact support@quantumnous.com
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
+  }
+
+  .landing-cursor-promo-glow,
+  .landing-cursor-promo-shimmer::after {
+    animation: none !important;
   }
 }
 
