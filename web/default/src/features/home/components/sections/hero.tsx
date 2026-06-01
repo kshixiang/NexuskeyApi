@@ -121,6 +121,13 @@ export function Hero(props: HeroProps) {
               ) : (
                 <>
                   <Button
+                    variant='outline'
+                    className='h-11 rounded-md border-white/15 bg-transparent hover:bg-white/[0.06]'
+                    render={<Link to='/shop/cursor' />}
+                  >
+                    {t('Buy Cursor Pro')}
+                  </Button>
+                  <Button
                     className={primaryCtaClassName}
                     render={<Link to='/sign-up' />}
                   >
