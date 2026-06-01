@@ -40,6 +40,10 @@ export function HeroButtons({ isAuthenticated }: HeroButtonsProps) {
 
   return (
     <>
+      <Button size='lg' render={<Link to='/shop/cursor' />}>
+        {t('Buy Cursor Pro')}
+        <ArrowRight className='ml-2 h-5 w-5' />
+      </Button>
       <Button size='lg' render={<Link to='/sign-up' />}>
         {t('Get Started')}
         <ArrowRight className='ml-2 h-5 w-5' />

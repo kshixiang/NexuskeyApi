@@ -10,5 +10,14 @@
   "Review and create": "Review and create",
   "Set separate prices for cache reads and writes.": "Set separate prices for cache reads and writes.",
   "Failed to sync official pricing": "Failed to sync official pricing",
-  "{{count}} model(s) have no pricing configured yet. You can still create the channel.": "{{count}} model(s) have no pricing configured yet. You can still create the channel."
+  "{{count}} model(s) have no pricing configured yet. You can still create the channel.": "{{count}} model(s) have no pricing configured yet. You can still create the channel.",
+  "Failed to update order": "Failed to update order",
+  "Guest checkout — no account required. Pay online and receive your Cursor Pro account by email or SMS.": "Guest checkout — no account required. Pay online and receive your Cursor Pro account by email or SMS.",
+  "Paid — awaiting or completed delivery": "Paid — awaiting or completed delivery",
+  "Please provide an email or phone number": "Please provide an email or phone number",
+  "Please try again later or contact support.": "Please try again later or contact support.",
+  "Review paid orders and mark them delivered after sending account credentials.": "Review paid orders and mark them delivered after sending account credentials.",
+  "Unable to load products": "Unable to load products",
+  "We received your payment. Account credentials will be sent to your contact soon.": "We received your payment. Account credentials will be sent to your contact soon.",
+  "After payment, we will send account credentials to your contact within 24 hours.": "After payment, we will send account credentials to your contact within 24 hours."
 }

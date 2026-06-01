@@ -177,6 +177,23 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/subscription/epay/notify", controller.SubscriptionEpayNotify)
 		apiRouter.GET("/subscription/epay/return", controller.SubscriptionEpayReturn)
 		apiRouter.POST("/subscription/epay/return", controller.SubscriptionEpayReturn)
+
+		// Digital shop (guest checkout, no auth)
+		apiRouter.GET("/digital-shop/public", controller.GetDigitalShopPublic)
+		apiRouter.POST("/digital-shop/orders", middleware.CriticalRateLimit(), controller.CreateDigitalShopOrder)
+		apiRouter.GET("/digital-shop/orders/:trade_no/status", controller.GetDigitalShopOrderStatus)
+		apiRouter.POST("/digital-shop/epay/notify", controller.DigitalShopEpayNotify)
+		apiRouter.GET("/digital-shop/epay/notify", controller.DigitalShopEpayNotify)
+		apiRouter.GET("/digital-shop/epay/return", controller.DigitalShopEpayReturn)
+		apiRouter.POST("/digital-shop/epay/return", controller.DigitalShopEpayReturn)
+
+		digitalShopAdminRoute := apiRouter.Group("/digital-shop/admin")
+		digitalShopAdminRoute.Use(middleware.AdminAuth())
+		{
+			digitalShopAdminRoute.GET("/orders", controller.AdminListDigitalShopOrders)
+			digitalShopAdminRoute.POST("/orders/:id/deliver", controller.AdminDeliverDigitalShopOrder)
+		}
+
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{

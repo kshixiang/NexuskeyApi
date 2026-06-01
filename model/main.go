@@ -281,6 +281,8 @@ func migrateDB() error {
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
+		&DigitalProduct{},
+		&DigitalProductOrder{},
 	)
 	if err != nil {
 		return err
@@ -293,6 +295,9 @@ func migrateDB() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	if err := ensureDefaultDigitalProduct(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -330,6 +335,8 @@ func migrateDBFast() error {
 		{&CustomOAuthProvider{}, "CustomOAuthProvider"},
 		{&UserOAuthBinding{}, "UserOAuthBinding"},
 		{&PerfMetric{}, "PerfMetric"},
+		{&DigitalProduct{}, "DigitalProduct"},
+		{&DigitalProductOrder{}, "DigitalProductOrder"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
@@ -362,6 +369,9 @@ func migrateDBFast() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	if err := ensureDefaultDigitalProduct(); err != nil {
+		return err
 	}
 	common.SysLog("database migrated")
 	return nil
