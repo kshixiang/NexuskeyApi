@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect } from 'react'
-import { Download } from 'lucide-react'
+import { Download, Sparkles } from 'lucide-react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
@@ -120,6 +120,28 @@ export function PublicHeader(props: PublicHeaderProps) {
     !toolDownloadActive && 'pointer-events-none opacity-75'
   )
 
+  const isCursorShopActive =
+    pathname === '/shop/cursor' || pathname.startsWith('/shop/cursor/')
+
+  const cursorProDesktopClass = cn(
+    'hidden h-9 shrink-0 gap-1.5 rounded-full border border-cyan-400/45 px-3.5 font-semibold whitespace-nowrap sm:inline-flex',
+    'bg-gradient-to-r from-violet-500 via-cyan-500 to-emerald-500 text-white',
+    'shadow-[0_0_22px_-6px_rgba(6,182,212,0.55)] hover:brightness-110 hover:shadow-[0_0_26px_-4px_rgba(6,182,212,0.65)]',
+    'active:translate-y-px transition-[filter,box-shadow,transform]',
+    isCursorShopActive && 'ring-2 ring-cyan-300/60 ring-offset-2 ring-offset-transparent'
+  )
+  const cursorProMobileRowClass = cn(
+    'h-8 shrink-0 gap-1 rounded-full border border-cyan-400/45 px-2.5 text-xs font-semibold whitespace-nowrap',
+    'bg-gradient-to-r from-violet-500 via-cyan-500 to-emerald-500 text-white',
+    'shadow-[0_0_18px_-6px_rgba(6,182,212,0.55)] hover:brightness-110',
+    isCursorShopActive && 'ring-2 ring-cyan-300/60'
+  )
+  const cursorProOverlayClass = cn(
+    'mb-2 flex items-center justify-center gap-2 rounded-xl border border-cyan-400/45 py-3.5 font-semibold',
+    'bg-gradient-to-r from-violet-500 via-cyan-500 to-emerald-500 text-white',
+    'shadow-[0_0_24px_-8px_rgba(6,182,212,0.55)] hover:brightness-110'
+  )
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
     onScroll()
@@ -205,6 +227,15 @@ export function PublicHeader(props: PublicHeaderProps) {
                   {t('Tool download')}
                 </Button>
               )}
+
+              <Button
+                size='sm'
+                className={cursorProDesktopClass}
+                render={<Link to='/shop/cursor' aria-label={t('Buy Cursor Pro')} />}
+              >
+                <Sparkles className='size-3.5 shrink-0' aria-hidden />
+                {t('Buy Cursor Pro')}
+              </Button>
             </div>
 
             {/* Desktop nav */}
@@ -277,6 +308,16 @@ export function PublicHeader(props: PublicHeaderProps) {
 
             {/* Mobile: compact actions + hamburger */}
             <div className='flex flex-1 items-center justify-end gap-2 sm:hidden'>
+              <Button
+                size='sm'
+                className={cursorProMobileRowClass}
+                render={<Link to='/shop/cursor' aria-label={t('Buy Cursor Pro')} />}
+              >
+                <Sparkles className='size-3 shrink-0' aria-hidden />
+                <span className='max-w-[5.5rem] truncate sm:max-w-none'>
+                  {t('Buy Cursor Pro')}
+                </span>
+              </Button>
               {toolDownloadActive ? (
                 <Button
                   size='sm'
@@ -355,6 +396,20 @@ export function PublicHeader(props: PublicHeaderProps) {
       >
         <div className='flex h-full flex-col justify-between px-8 pt-20 pb-10'>
           <nav className='flex flex-col gap-1'>
+            <Link
+              to='/shop/cursor'
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                cursorProOverlayClass,
+                mobileOpen
+                  ? 'translate-y-0 opacity-100'
+                  : 'translate-y-4 opacity-0'
+              )}
+              style={{ transitionDelay: mobileOpen ? '40ms' : '0ms' }}
+            >
+              <Sparkles className='size-4 shrink-0' aria-hidden />
+              {t('Buy Cursor Pro')}
+            </Link>
             {toolDownloadActive ? (
               <a
                 href={toolDownloadUrl}

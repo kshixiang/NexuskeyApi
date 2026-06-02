@@ -16,10 +16,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export { CTA } from './sections/cta'
-export { CursorProPromo } from './sections/cursor-pro-promo'
-export { Features } from './sections/features'
-export { Hero } from './sections/hero'
-export { HowItWorks } from './sections/how-it-works'
-export { SpecialNotice } from './sections/special-notice'
-export { Stats } from './sections/stats'
+import { AnimateInView } from '@/components/animate-in-view'
+import { CursorProPromoCard } from '../cursor-pro-promo-card'
+
+export function CursorProPromo() {
+  return (
+    <section
+      aria-labelledby='home-cursor-pro-heading'
+      className='relative z-10 px-6 pb-16 md:pb-20'
+    >
+      <div className='mx-auto max-w-6xl'>
+        <AnimateInView animation='fade-up'>
+          <CursorProPromoCard />
+        </AnimateInView>
+      </div>
+    </section>
+  )
+}

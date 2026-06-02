@@ -22,7 +22,6 @@ import { useTranslation } from 'react-i18next'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { Button } from '@/components/ui/button'
 import { HeroCodeSymbols } from '../hero-code-symbols'
-import { HeroCursorProPromo } from '../hero-cursor-pro-promo'
 import { HeroTerminalDemo } from '../hero-terminal-demo'
 
 interface HeroProps {
@@ -98,10 +97,9 @@ export function Hero(props: HeroProps) {
                 {t('every AI model you need')}
               </span>
             </h1>
-            <HeroCursorProPromo className='mt-7' animationDelay='100ms' />
             <p
-              className='landing-animate-fade-up text-muted-foreground mt-7 max-w-xl text-base leading-relaxed opacity-0 md:text-lg'
-              style={{ animationDelay: '160ms' }}
+              className='landing-animate-fade-up text-muted-foreground mt-5 max-w-xl text-base leading-relaxed opacity-0 md:text-lg'
+              style={{ animationDelay: '100ms' }}
             >
               {t(
                 '{{systemName}} offers multiple stable upstream channels with smart scheduling. Recharge at 1 CNY = 1 USD in credits—transparent pricing, no conversion markup.',
@@ -109,8 +107,8 @@ export function Hero(props: HeroProps) {
               )}
             </p>
             <div
-              className='landing-animate-fade-up mt-8 flex w-full flex-wrap items-center justify-center gap-3 opacity-0 lg:justify-start'
-              style={{ animationDelay: '220ms' }}
+              className='landing-animate-fade-up mt-9 flex w-full flex-wrap items-center justify-center gap-3 opacity-0 lg:justify-start'
+              style={{ animationDelay: '160ms' }}
             >
               {props.isAuthenticated ? (
                 <>
