@@ -190,6 +190,8 @@ func SetApiRouter(router *gin.Engine) {
 		digitalShopAdminRoute := apiRouter.Group("/digital-shop/admin")
 		digitalShopAdminRoute.Use(middleware.AdminAuth())
 		{
+			digitalShopAdminRoute.GET("/products/cursor-pro", controller.AdminGetCursorProProduct)
+			digitalShopAdminRoute.PUT("/products/cursor-pro", controller.AdminUpdateCursorProProduct)
 			digitalShopAdminRoute.GET("/orders", controller.AdminListDigitalShopOrders)
 			digitalShopAdminRoute.POST("/orders/:id/deliver", controller.AdminDeliverDigitalShopOrder)
 		}

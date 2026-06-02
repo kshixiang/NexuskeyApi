@@ -22,6 +22,7 @@ import type {
   CreateDigitalOrderResponse,
   DigitalOrderStatus,
   DigitalOrdersListResponse,
+  DigitalProduct,
   DigitalShopPublicData,
 } from './types'
 
@@ -69,5 +70,29 @@ export async function deliverDigitalOrder(
   const res = await api.post(`/api/digital-shop/admin/orders/${orderId}/deliver`, {
     note,
   })
+  return res.data
+}
+
+export async function getAdminCursorProProduct(): Promise<{
+  success: boolean
+  message?: string
+  data: DigitalProduct
+}> {
+  const res = await api.get('/api/digital-shop/admin/products/cursor-pro')
+  return res.data
+}
+
+export async function updateAdminCursorProProduct(payload: {
+  price_amount: number
+  enabled: boolean
+}): Promise<{
+  success: boolean
+  message?: string
+  data: DigitalProduct
+}> {
+  const res = await api.put(
+    '/api/digital-shop/admin/products/cursor-pro',
+    payload
+  )
   return res.data
 }

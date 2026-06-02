@@ -16,6 +16,9 @@ const (
 	DigitalOrderStatusExpired   = "expired"
 
 	defaultDigitalProductSlug = "cursor-pro"
+
+	// DefaultCursorProPriceAmount is the seed/default CNY price for Cursor Pro.
+	DefaultCursorProPriceAmount = 85
 )
 
 var (
@@ -117,6 +120,44 @@ func ListEnabledDigitalProducts() ([]*DigitalProduct, error) {
 		Order("sort asc, id asc").
 		Find(&products).Error
 	return products, err
+}
+
+func defaultCursorProDigitalProduct() *DigitalProduct {
+	return &DigitalProduct{
+		Slug:        defaultDigitalProductSlug,
+		Title:       "Cursor Pro",
+		Subtitle:    "Official-style subscription account",
+		Description: "Purchase Cursor Pro. After payment we will send account credentials to your email or phone.",
+		PriceAmount: DefaultCursorProPriceAmount,
+		Currency:    "CNY",
+		Enabled:     true,
+		Sort:        0,
+		FeatureLines: "Full Cursor Pro features\nFast AI coding assistance\nManual delivery after payment",
+	}
+}
+
+// EnsureCursorProDigitalProduct returns the cursor-pro product, creating it when missing.
+func EnsureCursorProDigitalProduct() (*DigitalProduct, error) {
+	product, err := GetDigitalProductBySlug(defaultDigitalProductSlug)
+	if err == nil {
+		return product, nil
+	}
+	if !errors.Is(err, ErrDigitalProductNotFound) {
+		return nil, err
+	}
+	product = defaultCursorProDigitalProduct()
+	if err := DB.Create(product).Error; err != nil {
+		return nil, fmt.Errorf("create cursor-pro digital product failed: %w", err)
+	}
+	common.SysLog("cursor-pro digital product created")
+	return product, nil
+}
+
+func UpdateDigitalProduct(product *DigitalProduct) error {
+	if product == nil || product.Id <= 0 {
+		return errors.New("invalid digital product")
+	}
+	return DB.Save(product).Error
 }
 
 func GetDigitalProductOrderByTradeNo(tradeNo string) *DigitalProductOrder {
@@ -272,17 +313,7 @@ func ensureDefaultDigitalProduct() error {
 	if count > 0 {
 		return nil
 	}
-	product := &DigitalProduct{
-		Slug:        defaultDigitalProductSlug,
-		Title:       "Cursor Pro",
-		Subtitle:    "Official-style subscription account",
-		Description: "Purchase Cursor Pro. After payment we will send account credentials to your email or phone.",
-		PriceAmount: 168,
-		Currency:    "CNY",
-		Enabled:     true,
-		Sort:        0,
-		FeatureLines: "Full Cursor Pro features\nFast AI coding assistance\nManual delivery after payment",
-	}
+	product := defaultCursorProDigitalProduct()
 	if err := DB.Create(product).Error; err != nil {
 		return fmt.Errorf("seed default digital product failed: %w", err)
 	}

@@ -33,6 +33,11 @@ type digitalShopDeliverRequest struct {
 	Note string `json:"note"`
 }
 
+type adminCursorProProductRequest struct {
+	PriceAmount float64 `json:"price_amount"`
+	Enabled     bool    `json:"enabled"`
+}
+
 func GetDigitalShopPublic(c *gin.Context) {
 	products, err := model.ListEnabledDigitalProducts()
 	if err != nil {
@@ -278,6 +283,50 @@ func DigitalShopEpayReturn(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusFound, successBase+"?pay=pending&trade_no="+url.QueryEscape(tradeNo))
+}
+
+func AdminGetCursorProProduct(c *gin.Context) {
+	product, err := model.EnsureCursorProDigitalProduct()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    product,
+	})
+}
+
+func AdminUpdateCursorProProduct(c *gin.Context) {
+	var req adminCursorProProductRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if req.PriceAmount < 0.01 {
+		common.ApiErrorMsg(c, "价格必须大于 0")
+		return
+	}
+
+	product, err := model.EnsureCursorProDigitalProduct()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	product.PriceAmount = req.PriceAmount
+	product.Enabled = req.Enabled
+	if err := model.UpdateDigitalProduct(product); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    product,
+	})
 }
 
 func AdminListDigitalShopOrders(c *gin.Context) {

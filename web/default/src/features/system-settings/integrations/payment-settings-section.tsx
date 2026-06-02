@@ -56,6 +56,7 @@ import {
   WaffoSettingsSection,
   type WaffoSettingsValues,
 } from './waffo-settings-section'
+import { CursorProShopSettingsSection } from './cursor-pro-shop-settings-section'
 
 const paymentSchema = z.object({
   PayAddress: z.string().refine((value) => {
@@ -1301,6 +1302,10 @@ export function PaymentSettingsSection({
           </Button>
         </form>
       </Form>
+
+      <Separator />
+
+      <CursorProShopSettingsSection />
 
       <Separator />
 
