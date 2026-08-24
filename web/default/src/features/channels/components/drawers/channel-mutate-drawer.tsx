@@ -153,6 +153,7 @@ import type { Channel } from '../../types'
 import { useChannelModelPricing } from '../../hooks/use-channel-model-pricing'
 import { useChannels } from '../channels-provider'
 import { ModelPricingSheet } from '@/features/system-settings/models/model-pricing-sheet'
+import { AddGroupDialog } from '../dialogs/add-group-dialog'
 import { CodexOAuthDialog } from '../dialogs/codex-oauth-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
 import {
@@ -312,6 +313,7 @@ export function ChannelMutateDrawer({
   const [customModel, setCustomModel] = useState('')
   const [isFetchingModels, setIsFetchingModels] = useState(false)
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false)
+  const [addGroupDialogOpen, setAddGroupDialogOpen] = useState(false)
   const [channelKey, setChannelKey] = useState<string | null>(null)
   const [isChannelKeyLoading, setIsChannelKeyLoading] = useState(false)
   const [codexOAuthDialogOpen, setCodexOAuthDialogOpen] = useState(false)
@@ -1092,9 +1094,21 @@ export function ChannelMutateDrawer({
       if (!v) {
         form.reset(CHANNEL_FORM_DEFAULT_VALUES)
         setAdvancedSettingsOpen(false)
+        setAddGroupDialogOpen(false)
       }
     },
     [onOpenChange, form]
+  )
+
+  const handleGroupCreated = useCallback(
+    (group: string) => {
+      const selectedGroups = form.getValues('group')
+      form.setValue('group', Array.from(new Set([...selectedGroups, group])), {
+        shouldDirty: true,
+        shouldValidate: true,
+      })
+    },
+    [form]
   )
 
   const handleAdvancedSettingsOpenChange = useCallback((nextOpen: boolean) => {
@@ -2433,7 +2447,20 @@ export function ChannelMutateDrawer({
                   name='group'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Groups *')}</FormLabel>
+                      <div className='flex items-center justify-between gap-2'>
+                        <FormLabel>{t('Groups *')}</FormLabel>
+                        {isEditing && (
+                          <Button
+                            type='button'
+                            variant='ghost'
+                            size='sm'
+                            onClick={() => setAddGroupDialogOpen(true)}
+                          >
+                            <Plus data-icon='inline-start' />
+                            {t('Add group')}
+                          </Button>
+                        )}
+                      </div>
                       <FormControl>
                         {isLoadingGroups ? (
                           <Skeleton className='h-10 w-full' />
@@ -2443,8 +2470,6 @@ export function ChannelMutateDrawer({
                             selected={field.value}
                             onChange={field.onChange}
                             placeholder={t(FIELD_PLACEHOLDERS.GROUP)}
-                            allowCustomValue
-                            customValueLabel={t('Add group')}
                           />
                         )}
                       </FormControl>
@@ -3392,6 +3417,15 @@ export function ChannelMutateDrawer({
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {isEditing && (
+        <AddGroupDialog
+          open={addGroupDialogOpen}
+          onOpenChange={setAddGroupDialogOpen}
+          existingGroups={groupsData?.data || []}
+          onCreated={handleGroupCreated}
+        />
+      )}
 
       {paramOverrideEditorOpen && (
         <ParamOverrideEditorDialog

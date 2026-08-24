@@ -35,8 +35,6 @@ interface MultiSelectProps {
   onChange: (values: string[]) => void
   placeholder?: string
   className?: string
-  allowCustomValue?: boolean
-  customValueLabel?: string
   /** When set, clicking a selected item label opens an action (e.g. model pricing). */
   onItemClick?: (value: string) => void
 }
@@ -47,8 +45,6 @@ export function MultiSelect({
   onChange,
   placeholder,
   className,
-  allowCustomValue = false,
-  customValueLabel,
   onItemClick,
 }: MultiSelectProps) {
   const { t } = useTranslation()
@@ -78,17 +74,6 @@ export function MultiSelect({
   const selectables = options.filter(
     (option) => !selected.includes(option.value)
   )
-  const customValue = inputValue.trim()
-  const canAddCustomValue =
-    allowCustomValue &&
-    customValue.length > 0 &&
-    !selected.includes(customValue) &&
-    !options.some((option) => option.value === customValue)
-
-  const handleSelect = (value: string) => {
-    setInputValue('')
-    onChange([...selected, value])
-  }
 
   return (
     <Command
@@ -158,26 +143,9 @@ export function MultiSelect({
         </div>
       </div>
       <div className='relative'>
-        {open && (selectables.length > 0 || canAddCustomValue) ? (
+        {open && selectables.length > 0 ? (
           <div className='bg-popover text-popover-foreground animate-in absolute top-0 z-10 w-full rounded-md border shadow-md outline-none'>
-            <CommandGroup
-              forceMount={canAddCustomValue || undefined}
-              className='h-full max-h-60 overflow-auto'
-            >
-              {canAddCustomValue && (
-                <CommandItem
-                  value={`create:${customValue}`}
-                  forceMount
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                  }}
-                  onSelect={() => handleSelect(customValue)}
-                  className='cursor-pointer'
-                >
-                  {customValueLabel || t('Add')}: {customValue}
-                </CommandItem>
-              )}
+            <CommandGroup className='h-full max-h-60 overflow-auto'>
               {selectables.map((option) => {
                 return (
                   <CommandItem
@@ -186,7 +154,10 @@ export function MultiSelect({
                       e.preventDefault()
                       e.stopPropagation()
                     }}
-                    onSelect={() => handleSelect(option.value)}
+                    onSelect={() => {
+                      setInputValue('')
+                      onChange([...selected, option.value])
+                    }}
                     className='cursor-pointer'
                   >
                     {option.label}
