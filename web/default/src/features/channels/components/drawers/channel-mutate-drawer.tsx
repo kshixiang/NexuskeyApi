@@ -2443,6 +2443,8 @@ export function ChannelMutateDrawer({
                             selected={field.value}
                             onChange={field.onChange}
                             placeholder={t(FIELD_PLACEHOLDERS.GROUP)}
+                            allowCustomValue
+                            customValueLabel={t('Add group')}
                           />
                         )}
                       </FormControl>
