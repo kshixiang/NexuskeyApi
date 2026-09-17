@@ -308,6 +308,8 @@ export function ChannelMutateDrawer({
     pricingModel,
     openModelPricing,
     handlePricingSave,
+    isSyncingOfficialPricing,
+    syncOfficialPricing,
   } = useChannelModelPricing()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [customModel, setCustomModel] = useState('')
@@ -2273,6 +2275,26 @@ export function ChannelMutateDrawer({
                                 {t('Fetch from Upstream')}
                               </Button>
                             )}
+                            <Button
+                              type='button'
+                              variant='outline'
+                              size='sm'
+                              onClick={() =>
+                                void syncOfficialPricing(currentModelsArray)
+                              }
+                              disabled={
+                                currentModelsArray.length === 0 ||
+                                isSyncingOfficialPricing
+                              }
+                            >
+                              <RefreshCw
+                                className={cn(
+                                  'mr-2 h-4 w-4',
+                                  isSyncingOfficialPricing && 'animate-spin'
+                                )}
+                              />
+                              {t('Sync Official Pricing')}
+                            </Button>
                             <Button
                               type='button'
                               variant='outline'

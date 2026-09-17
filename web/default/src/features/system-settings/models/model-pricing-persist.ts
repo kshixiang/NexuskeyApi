@@ -321,3 +321,18 @@ export function mergeModelPricingData(
 
   return { snapshot: nextSnapshot, updates }
 }
+
+export function getModelPricingUpdates(
+  previousSnapshot: ModelPricingOptionsSnapshot,
+  nextSnapshot: ModelPricingOptionsSnapshot
+): UpdateOptionRequest[] {
+  return PRICING_OPTION_KEYS.reduce<UpdateOptionRequest[]>((updates, key) => {
+    if (
+      normalizeJsonString(previousSnapshot[key]) !==
+      normalizeJsonString(nextSnapshot[key])
+    ) {
+      updates.push({ key, value: nextSnapshot[key] })
+    }
+    return updates
+  }, [])
+}

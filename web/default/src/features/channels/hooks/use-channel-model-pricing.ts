@@ -20,10 +20,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import {
+  fetchBuiltinModelPricing,
+  updateSystemOption,
+} from '@/features/system-settings/api'
 import { useSystemOptions } from '@/features/system-settings/hooks/use-system-options'
 import { useUpdateOption } from '@/features/system-settings/hooks/use-update-option'
 import {
+  builtinPricingToModelRatioData,
   emptyModelPricingSnapshot,
+  getModelPricingUpdates,
   loadModelPricingData,
   mergeModelPricingData,
   modelHasPricing,
@@ -49,6 +55,8 @@ export function useChannelModelPricing() {
     useState<ModelPricingOptionsSnapshot>(emptyModelPricingSnapshot())
   const [pricingOpen, setPricingOpen] = useState(false)
   const [pricingModel, setPricingModel] = useState<ModelRatioData | null>(null)
+  const [isSyncingOfficialPricing, setIsSyncingOfficialPricing] =
+    useState(false)
 
   useEffect(() => {
     if (systemOptions?.data) {
@@ -101,6 +109,83 @@ export function useChannelModelPricing() {
     [effectiveSnapshot, queryClient, t, updateOption]
   )
 
+  const syncOfficialPricing = useCallback(
+    async (modelNames: string[]) => {
+      const uniqueModelNames = Array.from(
+        new Set(modelNames.map((model) => model.trim()).filter(Boolean))
+      )
+      if (uniqueModelNames.length === 0) {
+        toast.info(t('Please add models first'))
+        return
+      }
+
+      setIsSyncingOfficialPricing(true)
+      try {
+        const pricingResults = await Promise.all(
+          uniqueModelNames.map(async (model) => {
+            try {
+              const response = await fetchBuiltinModelPricing(model)
+              return response.success && response.data?.found
+                ? { model, pricing: response.data }
+                : null
+            } catch {
+              return null
+            }
+          })
+        )
+
+        let nextSnapshot = effectiveSnapshot
+        let syncedCount = 0
+        for (const result of pricingResults) {
+          if (!result) continue
+          nextSnapshot = mergeModelPricingData(
+            nextSnapshot,
+            builtinPricingToModelRatioData(result.model, result.pricing)
+          ).snapshot
+          syncedCount++
+        }
+
+        if (syncedCount === 0) {
+          toast.error(t('No official pricing found for the channel models'))
+          return
+        }
+
+        const updates = getModelPricingUpdates(
+          effectiveSnapshot,
+          nextSnapshot
+        )
+        await Promise.all(
+          updates.map(async (update) => {
+            const response = await updateSystemOption(update)
+            if (!response.success) {
+              throw new Error(
+                response.message || t('Failed to update setting')
+              )
+            }
+          })
+        )
+        setPricingSnapshot(nextSnapshot)
+        await queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        toast.success(
+          t(
+            'Official pricing synced for {{synced}} of {{total}} channel models',
+            {
+              synced: syncedCount,
+              total: uniqueModelNames.length,
+            }
+          )
+        )
+      } catch (error: unknown) {
+        toast.error(
+          getErrorMessage(error) || t('Failed to sync official pricing')
+        )
+      } finally {
+        setIsSyncingOfficialPricing(false)
+      }
+    },
+    [effectiveSnapshot, queryClient, t]
+  )
+
   return {
     pricingOpen,
     setPricingOpen,
@@ -109,5 +194,7 @@ export function useChannelModelPricing() {
     hasModelPricing,
     handlePricingSave,
     effectiveSnapshot,
+    isSyncingOfficialPricing,
+    syncOfficialPricing,
   }
 }
