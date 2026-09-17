@@ -21,7 +21,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { Markdown } from '@/components/ui/markdown'
 import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
-import { CTA, CursorProPromo, Features, Hero, HowItWorks, SpecialNotice, Stats } from './components'
+import { CTA, Features, Hero, HowItWorks, Stats } from './components'
 import { useHomePageContent } from './hooks'
 
 export function Home() {
@@ -67,8 +67,6 @@ export function Home() {
         <Stats />
         <Features />
         <HowItWorks />
-        <SpecialNotice />
-        <CursorProPromo />
         <CTA isAuthenticated={isAuthenticated} />
         <Footer />
       </div>

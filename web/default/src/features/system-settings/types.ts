@@ -387,14 +387,14 @@ export type BuiltinModelPricing = {
   /** basellm | modelsdev */
   source?: string
   use_price: boolean
-  price?: number
-  ratio?: number
-  completion_ratio?: number
-  cache_ratio?: number
-  create_cache_ratio?: number
-  image_ratio?: number
-  audio_ratio?: number
-  audio_completion_ratio?: number
+  price?: number | null
+  ratio?: number | null
+  completion_ratio?: number | null
+  cache_ratio?: number | null
+  create_cache_ratio?: number | null
+  image_ratio?: number | null
+  audio_ratio?: number | null
+  audio_completion_ratio?: number | null
 }
 
 export type BuiltinModelPricingResponse = {

@@ -23,8 +23,8 @@ import { normalizeJsonString } from './utils'
 import type { BuiltinModelPricing } from '../types'
 import type { ModelRatioData } from './model-pricing-sheet'
 
-function formatBuiltinNumber(value: number | undefined): string {
-  if (value === undefined || Number.isNaN(value)) return ''
+function formatBuiltinNumber(value: number | undefined | null): string {
+  if (value === undefined || value === null || Number.isNaN(value)) return ''
   return String(value)
 }
 

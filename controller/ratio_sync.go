@@ -878,11 +878,28 @@ func buildModelsDevCandidate(provider string, cost modelsDevCost) (modelsDevCand
 	}, true
 }
 
+func isOfficialModelsDevProvider(provider string) bool {
+	switch provider {
+	case "openai", "anthropic", "google", "google-vertex", "cohere", "mistral", "meta", "deepseek", "zai", "zhipuai", "alibaba":
+		return true
+	default:
+		return false
+	}
+}
+
 func shouldReplaceModelsDevCandidate(current, next modelsDevCandidate) bool {
+	currentIsOfficial := isOfficialModelsDevProvider(current.Provider)
+	nextIsOfficial := isOfficialModelsDevProvider(next.Provider)
+	if currentIsOfficial != nextIsOfficial {
+		return nextIsOfficial
+	}
+	if !currentIsOfficial {
+		return false
+	}
+
 	currentNonZero := current.Input > 0
 	nextNonZero := next.Input > 0
 	if currentNonZero != nextNonZero {
-		// Prefer non-zero pricing data; this matches "cheapest non-zero" conflict policy.
 		return nextNonZero
 	}
 	if nextNonZero && !nearlyEqual(next.Input, current.Input) {
@@ -900,9 +917,10 @@ func shouldReplaceModelsDevCandidate(current, next modelsDevCandidate) bool {
 //	completion_ratio = output_cost / input_cost
 //	cache_ratio = cache_read_cost / input_cost
 //
-// Duplicate model keys across providers are resolved by selecting the
-// cheapest non-zero input cost. If only zero-priced candidates exist,
-// a zero ratio is kept.
+// Duplicate model keys across providers prefer an official provider. Among
+// official providers, the cheapest non-zero input cost wins. If no official
+// provider offers the model, the first provider in sorted order is kept as a
+// deterministic fallback.
 func convertModelsDevToRatioData(reader io.Reader) (map[string]any, error) {
 	var upstreamData map[string]modelsDevProvider
 	if err := common.DecodeJson(reader, &upstreamData); err != nil {
