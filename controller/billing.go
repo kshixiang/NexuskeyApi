@@ -1,12 +1,63 @@
 package controller
 
 import (
+	"net/http"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
+
+type CCSwitchUsageResponse struct {
+	IsActive  bool    `json:"is_active"`
+	Remaining float64 `json:"remaining"`
+	Unit      string  `json:"unit"`
+}
+
+func quotaToDisplayAmount(quota int) (float64, string) {
+	amount := float64(quota)
+	displayType := operation_setting.GetQuotaDisplayType()
+	switch displayType {
+	case operation_setting.QuotaDisplayTypeCNY:
+		return amount / common.QuotaPerUnit * operation_setting.USDExchangeRate, displayType
+	case operation_setting.QuotaDisplayTypeTokens:
+		return amount, displayType
+	case operation_setting.QuotaDisplayTypeCustom:
+		setting := operation_setting.GetGeneralSetting()
+		return amount / common.QuotaPerUnit * setting.CustomCurrencyExchangeRate, setting.CustomCurrencySymbol
+	default:
+		return amount / common.QuotaPerUnit, operation_setting.QuotaDisplayTypeUSD
+	}
+}
+
+func isTokenActiveForUsage(token *model.Token) bool {
+	return token.Status == common.TokenStatusEnabled &&
+		(token.ExpiredTime == -1 || token.ExpiredTime >= common.GetTimestamp()) &&
+		(token.UnlimitedQuota || token.RemainQuota > 0)
+}
+
+func GetCCSwitchUsage(c *gin.Context) {
+	token, err := model.GetTokenById(c.GetInt("token_id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": types.OpenAIError{Message: err.Error(), Type: "new_api_error"},
+		})
+		return
+	}
+
+	remaining, unit := quotaToDisplayAmount(token.RemainQuota)
+	if token.UnlimitedQuota {
+		remaining = 100000000
+	}
+
+	c.JSON(http.StatusOK, CCSwitchUsageResponse{
+		IsActive:  isTokenActiveForUsage(token),
+		Remaining: remaining,
+		Unit:      unit,
+	})
+}
 
 func GetSubscription(c *gin.Context) {
 	var remainQuota int

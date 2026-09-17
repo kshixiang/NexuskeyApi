@@ -8,6 +8,14 @@ import (
 )
 
 func SetDashboardRouter(router *gin.Engine) {
+	readOnlyRouter := router.Group("/")
+	readOnlyRouter.Use(middleware.RouteTag("old_api"))
+	readOnlyRouter.Use(gzip.Gzip(gzip.DefaultCompression))
+	readOnlyRouter.Use(middleware.GlobalAPIRateLimit())
+	readOnlyRouter.Use(middleware.CORS())
+	readOnlyRouter.Use(middleware.TokenAuthReadOnly())
+	readOnlyRouter.GET("/v1/usage", controller.GetCCSwitchUsage)
+
 	apiRouter := router.Group("/")
 	apiRouter.Use(middleware.RouteTag("old_api"))
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))

@@ -32,6 +32,7 @@ import { selectFilter } from '../../../../helpers';
 const APP_CONFIGS = {
   claude: {
     label: 'Claude',
+    importApp: 'claude',
     defaultName: 'My Claude',
     modelFields: [
       { key: 'model', label: '主模型' },
@@ -42,15 +43,42 @@ const APP_CONFIGS = {
   },
   codex: {
     label: 'Codex',
+    importApp: 'codex',
     defaultName: 'My Codex',
+    defaultModel: 'gpt-5.5',
     modelFields: [{ key: 'model', label: '主模型' }],
   },
   gemini: {
     label: 'Gemini',
+    importApp: 'gemini',
     defaultName: 'My Gemini',
     modelFields: [{ key: 'model', label: '主模型' }],
   },
+  grok: {
+    label: 'Grok',
+    importApp: 'grokbuild',
+    defaultName: 'My Grok',
+    defaultModel: 'grok-4.5',
+    modelFields: [{ key: 'model', label: '主模型' }],
+  },
 };
+
+const CC_SWITCH_USAGE_SCRIPT = `({
+  request: {
+    url: "{{baseUrl}}/v1/usage",
+    method: "GET",
+    headers: { "Authorization": "Bearer {{apiKey}}" }
+  },
+  extractor: function(response) {
+    const remaining = response?.remaining ?? response?.quota?.remaining ?? response?.balance;
+    const unit = response?.unit ?? response?.quota?.unit ?? "USD";
+    return {
+      isValid: response?.is_active ?? response?.isValid ?? true,
+      remaining,
+      unit
+    };
+  }
+})`;
 
 function getServerAddress() {
   try {
@@ -63,12 +91,26 @@ function getServerAddress() {
   return window.location.origin;
 }
 
+function withV1Endpoint(baseUrl) {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+  return normalizedBaseUrl.endsWith('/v1')
+    ? normalizedBaseUrl
+    : `${normalizedBaseUrl}/v1`;
+}
+
+function getDefaultModels(app) {
+  const defaultModel = APP_CONFIGS[app].defaultModel;
+  return defaultModel ? { model: defaultModel } : {};
+}
+
 function buildCCSwitchURL(app, name, models, apiKey) {
-  const serverAddress = getServerAddress();
-  const endpoint = app === 'codex' ? serverAddress + '/v1' : serverAddress;
+  const serverAddress = getServerAddress().replace(/\/+$/, '');
+  const config = APP_CONFIGS[app];
+  const endpoint =
+    app === 'grok' ? withV1Endpoint(serverAddress) : serverAddress;
   const params = new URLSearchParams();
   params.set('resource', 'provider');
-  params.set('app', app);
+  params.set('app', config.importApp);
   params.set('name', name);
   params.set('endpoint', endpoint);
   params.set('apiKey', apiKey);
@@ -76,7 +118,10 @@ function buildCCSwitchURL(app, name, models, apiKey) {
     if (v) params.set(k, v);
   }
   params.set('homepage', serverAddress);
-  params.set('enabled', 'true');
+  params.set('configFormat', 'json');
+  params.set('usageEnabled', 'true');
+  params.set('usageScript', window.btoa(CC_SWITCH_USAGE_SCRIPT));
+  params.set('usageAutoInterval', '30');
   return `ccswitch://v1/import?${params.toString()}`;
 }
 
@@ -104,7 +149,7 @@ export default function CCSwitchModal({
   const handleAppChange = (val) => {
     setApp(val);
     setName(APP_CONFIGS[val].defaultName);
-    setModels({});
+    setModels(getDefaultModels(val));
   };
 
   const handleModelChange = (field, value) => {
@@ -116,8 +161,9 @@ export default function CCSwitchModal({
       Toast.warning(t('请选择主模型'));
       return;
     }
-    const url = buildCCSwitchURL(app, name, models, 'sk-' + tokenKey);
-    window.open(url, '_blank');
+    const key = tokenKey.startsWith('sk-') ? tokenKey : `sk-${tokenKey}`;
+    const url = buildCCSwitchURL(app, name, models, key);
+    window.open(url, '_self');
     onClose();
   };
 

@@ -32,10 +32,12 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { buildCCSwitchImportURL, withV1Endpoint } from '../../lib/cc-switch'
 
 const APP_CONFIGS = {
   claude: {
     label: 'Claude',
+    importApp: 'claude',
     defaultName: 'My Claude',
     modelFields: [
       { key: 'model', labelKey: 'Primary Model', required: true },
@@ -46,12 +48,22 @@ const APP_CONFIGS = {
   },
   codex: {
     label: 'Codex',
+    importApp: 'codex',
     defaultName: 'My Codex',
+    defaultModel: 'gpt-5.5',
     modelFields: [{ key: 'model', labelKey: 'Primary Model', required: true }],
   },
   gemini: {
     label: 'Gemini',
+    importApp: 'gemini',
     defaultName: 'My Gemini',
+    modelFields: [{ key: 'model', labelKey: 'Primary Model', required: true }],
+  },
+  grok: {
+    label: 'Grok',
+    importApp: 'grokbuild',
+    defaultName: 'My Grok',
+    defaultModel: 'grok-4.5',
     modelFields: [{ key: 'model', labelKey: 'Primary Model', required: true }],
   },
 } as const
@@ -71,26 +83,9 @@ function getServerAddress(): string {
   return window.location.origin
 }
 
-function buildCCSwitchURL(
-  app: string,
-  name: string,
-  models: Record<string, string>,
-  apiKey: string
-): string {
-  const serverAddress = getServerAddress()
-  const endpoint = app === 'codex' ? serverAddress + '/v1' : serverAddress
-  const params = new URLSearchParams()
-  params.set('resource', 'provider')
-  params.set('app', app)
-  params.set('name', name)
-  params.set('endpoint', endpoint)
-  params.set('apiKey', apiKey)
-  for (const [k, v] of Object.entries(models)) {
-    if (v) params.set(k, v)
-  }
-  params.set('homepage', serverAddress)
-  params.set('enabled', 'true')
-  return `ccswitch://v1/import?${params.toString()}`
+function getDefaultModels(app: AppType): Record<string, string> {
+  const config = APP_CONFIGS[app]
+  return 'defaultModel' in config ? { model: config.defaultModel } : {}
 }
 
 interface Props {
@@ -134,7 +129,7 @@ export function CCSwitchDialog(props: Props) {
     const appVal = val as AppType
     setApp(appVal)
     setName(APP_CONFIGS[appVal].defaultName)
-    setModels({})
+    setModels(getDefaultModels(appVal))
   }
 
   const handleSubmit = () => {
@@ -145,8 +140,18 @@ export function CCSwitchDialog(props: Props) {
     const key = props.tokenKey.startsWith('sk-')
       ? props.tokenKey
       : `sk-${props.tokenKey}`
-    const url = buildCCSwitchURL(app, name, models, key)
-    window.open(url, '_blank')
+    const serverAddress = getServerAddress().replace(/\/+$/, '')
+    const endpoint =
+      app === 'grok' ? withV1Endpoint(serverAddress) : serverAddress
+    const url = buildCCSwitchImportURL({
+      app: currentConfig.importApp,
+      name,
+      endpoint,
+      homepage: serverAddress,
+      apiKey: key,
+      models,
+    })
+    window.open(url, '_self')
     props.onOpenChange(false)
   }
 
