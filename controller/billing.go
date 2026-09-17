@@ -47,10 +47,16 @@ func GetCCSwitchUsage(c *gin.Context) {
 		return
 	}
 
-	remaining, unit := quotaToDisplayAmount(token.RemainQuota)
-	if token.UnlimitedQuota {
-		remaining = 100000000
+	userId := c.GetInt("id")
+	remainQuota, err := model.GetUserQuota(userId, false)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": types.OpenAIError{Message: err.Error(), Type: "new_api_error"},
+		})
+		return
 	}
+
+	remaining, unit := quotaToDisplayAmount(remainQuota)
 
 	c.JSON(http.StatusOK, CCSwitchUsageResponse{
 		IsActive:  isTokenActiveForUsage(token),
