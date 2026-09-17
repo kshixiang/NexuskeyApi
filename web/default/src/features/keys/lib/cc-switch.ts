@@ -50,6 +50,17 @@ function encodeBase64(value: string): string {
   return window.btoa(binary)
 }
 
+export function resolveAbsoluteHttpURL(value: string): string {
+  const fallback = window.location.origin
+  try {
+    const url = new URL(value.trim() || fallback, fallback)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return fallback
+    return url.toString().replace(/\/+$/, '')
+  } catch {
+    return fallback
+  }
+}
+
 export function withV1Endpoint(baseUrl: string): string {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
   return normalizedBaseUrl.endsWith('/v1')
@@ -58,11 +69,13 @@ export function withV1Endpoint(baseUrl: string): string {
 }
 
 export function buildCCSwitchImportURL(input: CCSwitchImportInput): string {
+  const endpoint = resolveAbsoluteHttpURL(input.endpoint)
+  const homepage = resolveAbsoluteHttpURL(input.homepage)
   const entries: [string, string][] = [
     ['resource', 'provider'],
     ['app', input.app],
     ['name', input.name],
-    ['endpoint', input.endpoint],
+    ['endpoint', endpoint],
     ['apiKey', input.apiKey],
   ]
 
@@ -71,7 +84,7 @@ export function buildCCSwitchImportURL(input: CCSwitchImportInput): string {
   }
 
   entries.push(
-    ['homepage', input.homepage],
+    ['homepage', homepage],
     ['configFormat', 'json'],
     ['usageEnabled', 'true'],
     ['usageScript', encodeBase64(CC_SWITCH_USAGE_SCRIPT)],

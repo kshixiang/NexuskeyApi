@@ -80,15 +80,28 @@ const CC_SWITCH_USAGE_SCRIPT = `({
   }
 })`;
 
+function resolveAbsoluteHttpURL(value) {
+  const fallback = window.location.origin;
+  try {
+    const url = new URL(String(value || '').trim() || fallback, fallback);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return fallback;
+    return url.toString().replace(/\/+$/, '');
+  } catch (_) {
+    return fallback;
+  }
+}
+
 function getServerAddress() {
   try {
     const raw = localStorage.getItem('status');
     if (raw) {
       const status = JSON.parse(raw);
-      if (status.server_address) return status.server_address;
+      if (status.server_address) {
+        return resolveAbsoluteHttpURL(status.server_address);
+      }
     }
   } catch (_) {}
-  return window.location.origin;
+  return resolveAbsoluteHttpURL(window.location.origin);
 }
 
 function withV1Endpoint(baseUrl) {

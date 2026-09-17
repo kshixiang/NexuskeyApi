@@ -32,7 +32,11 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { buildCCSwitchImportURL, withV1Endpoint } from '../../lib/cc-switch'
+import {
+  buildCCSwitchImportURL,
+  resolveAbsoluteHttpURL,
+  withV1Endpoint,
+} from '../../lib/cc-switch'
 
 const APP_CONFIGS = {
   claude: {
@@ -75,12 +79,14 @@ function getServerAddress(): string {
     const raw = localStorage.getItem('status')
     if (raw) {
       const status = JSON.parse(raw)
-      if (status.server_address) return status.server_address
+      if (status.server_address) {
+        return resolveAbsoluteHttpURL(String(status.server_address))
+      }
     }
   } catch {
     /* empty */
   }
-  return window.location.origin
+  return resolveAbsoluteHttpURL(window.location.origin)
 }
 
 function getDefaultModels(app: AppType): Record<string, string> {
