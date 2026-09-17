@@ -53,7 +53,13 @@ function encodeBase64(value: string): string {
 export function resolveAbsoluteHttpURL(value: string): string {
   const fallback = window.location.origin
   try {
-    const url = new URL(value.trim() || fallback, fallback)
+    const rawValue = value.trim()
+    const bareHostPattern =
+      /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|\[[0-9a-f:]+\]|(?:[a-z0-9-]+\.)+[a-z]{2,})(?::\d+)?(?:[/?#].*)?$/i
+    const candidate = bareHostPattern.test(rawValue)
+      ? `${window.location.protocol}//${rawValue}`
+      : rawValue || fallback
+    const url = new URL(candidate, fallback)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return fallback
     return url.toString().replace(/\/+$/, '')
   } catch {

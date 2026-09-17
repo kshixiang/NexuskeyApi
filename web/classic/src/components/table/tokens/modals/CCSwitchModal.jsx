@@ -83,7 +83,13 @@ const CC_SWITCH_USAGE_SCRIPT = `({
 function resolveAbsoluteHttpURL(value) {
   const fallback = window.location.origin;
   try {
-    const url = new URL(String(value || '').trim() || fallback, fallback);
+    const rawValue = String(value || '').trim();
+    const bareHostPattern =
+      /^(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|\[[0-9a-f:]+\]|(?:[a-z0-9-]+\.)+[a-z]{2,})(?::\d+)?(?:[/?#].*)?$/i;
+    const candidate = bareHostPattern.test(rawValue)
+      ? `${window.location.protocol}//${rawValue}`
+      : rawValue || fallback;
+    const url = new URL(candidate, fallback);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return fallback;
     return url.toString().replace(/\/+$/, '');
   } catch (_) {
