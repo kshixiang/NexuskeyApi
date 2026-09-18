@@ -114,8 +114,6 @@ export function ChannelUpstreamModelsPanel({
           )
         )
         setFetchedModels(unique)
-        const merged = Array.from(new Set([...selectedSet, ...unique]))
-        onModelsChange(formatModels(merged))
         toast.success(
           t('Fetched {{count}} model(s) from upstream', { count: unique.length })
         )
@@ -127,7 +125,7 @@ export function ChannelUpstreamModelsPanel({
     } finally {
       setIsFetching(false)
     }
-  }, [apiKey, baseUrl, channelType, onModelsChange, selectedSet, t])
+  }, [apiKey, baseUrl, channelType, t])
 
   const toggleModel = useCallback(
     (model: string, checked: boolean) => {

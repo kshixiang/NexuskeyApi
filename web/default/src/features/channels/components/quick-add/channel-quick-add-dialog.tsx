@@ -35,7 +35,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { MultiSelect } from '@/components/multi-select'
 import {
   Select,
   SelectContent,
@@ -46,6 +45,10 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import {
+  getSystemOptions,
+  updateSystemOption,
+} from '@/features/system-settings/api'
 import { useSystemOptions } from '@/features/system-settings/hooks/use-system-options'
 import { useUpdateOption } from '@/features/system-settings/hooks/use-update-option'
 import {
@@ -60,19 +63,19 @@ import {
   ModelPricingSheet,
   type ModelRatioData,
 } from '@/features/system-settings/models/model-pricing-sheet'
-import { createChannel, getChannels, getGroups } from '../../api'
+import { safeJsonParse } from '@/features/system-settings/utils/json-parser'
+import { createChannel, getChannels } from '../../api'
 import { CHANNEL_TYPE_OPTIONS, SUCCESS_MESSAGES } from '../../constants'
 import { channelsQueryKeys } from '../../lib/channel-actions'
+import { parseChannelConnectionString } from '../../lib/channel-connection'
 import {
   CHANNEL_FORM_DEFAULT_VALUES,
-  formatModels,
   parseModels,
   transformChannelToFormDefaults,
   transformFormDataToCreatePayload,
   type ChannelFormValues,
 } from '../../lib/channel-form'
 import { getChannelTypeConfig } from '../../lib/channel-type-config'
-import { parseChannelConnectionString } from '../../lib/channel-connection'
 import type { Channel } from '../../types'
 import { ChannelUpstreamModelsPanel } from './channel-upstream-models-panel'
 
@@ -93,15 +96,23 @@ function getErrorMessage(error: unknown): string | undefined {
   return undefined
 }
 
+function getQuickAddGroupRatio(value: string): number {
+  if (!value.trim()) return 1
+  const ratio = Number(value)
+  return Number.isFinite(ratio) ? ratio : 1
+}
+
 function buildInheritFormValues(
   channel: Channel,
   options?: { inheritBaseUrl?: boolean }
 ): ChannelFormValues {
   const inherited = transformChannelToFormDefaults(channel)
+  const name = `${channel.name}_copy`
   return {
     ...inherited,
     key: '',
-    name: `${channel.name}_copy`,
+    name,
+    group: [name],
     base_url:
       options?.inheritBaseUrl === false ? '' : inherited.base_url || '',
   }
@@ -121,21 +132,17 @@ export function ChannelQuickAddDialog({
   const [sourceMode, setSourceMode] = useState<'blank' | 'template'>('blank')
   const [templateChannelId, setTemplateChannelId] = useState<string>('')
   const [inheritBaseUrl, setInheritBaseUrl] = useState(true)
-  const [formValues, setFormValues] = useState<ChannelFormValues>(
-    CHANNEL_FORM_DEFAULT_VALUES
-  )
+  const [formValues, setFormValues] = useState<ChannelFormValues>({
+    ...CHANNEL_FORM_DEFAULT_VALUES,
+    group: [],
+  })
+  const [groupRatio, setGroupRatio] = useState('')
   const [pricingSnapshot, setPricingSnapshot] =
     useState<ModelPricingOptionsSnapshot>(emptyModelPricingSnapshot())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [reviewPricingOpen, setReviewPricingOpen] = useState(false)
   const [reviewPricingModel, setReviewPricingModel] =
     useState<ModelRatioData | null>(null)
-
-  const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
-    queryKey: ['groups'],
-    queryFn: getGroups,
-    enabled: open,
-  })
 
   const { data: channelsList } = useQuery({
     queryKey: channelsQueryKeys.list({ p: 1, page_size: 200 }),
@@ -147,14 +154,6 @@ export function ChannelQuickAddDialog({
     () => channelsList?.data?.items ?? [],
     [channelsList]
   )
-
-  const groupOptions = useMemo(() => {
-    const all = new Set([
-      ...(groupsData?.data ?? []),
-      ...(formValues.group ?? []),
-    ])
-    return Array.from(all).map((group) => ({ value: group, label: group }))
-  }, [formValues.group, groupsData?.data])
 
   const popularTypes = useMemo(
     () =>
@@ -230,7 +229,8 @@ export function ChannelQuickAddDialog({
     setSourceMode('blank')
     setTemplateChannelId('')
     setInheritBaseUrl(true)
-    setFormValues(CHANNEL_FORM_DEFAULT_VALUES)
+    setFormValues({ ...CHANNEL_FORM_DEFAULT_VALUES, group: [] })
+    setGroupRatio('')
     setPricingSnapshot(emptyModelPricingSnapshot())
     setIsSubmitting(false)
   }, [])
@@ -295,8 +295,11 @@ export function ChannelQuickAddDialog({
 
   const canNextFromCredentials = Boolean(formValues.key?.trim())
 
+  const parsedGroupRatio = groupRatio.trim() ? Number(groupRatio) : 1
   const canNextFromModels =
-    Boolean(formValues.models?.trim()) && (formValues.group?.length ?? 0) > 0
+    Boolean(formValues.models?.trim()) &&
+    Number.isFinite(parsedGroupRatio) &&
+    parsedGroupRatio >= 0
 
   const handleNext = useCallback(() => {
     if (step === 'source') {
@@ -322,22 +325,46 @@ export function ChannelQuickAddDialog({
   }, [step])
 
   const handleSubmit = useCallback(async () => {
-    if (!formValues.name.trim()) {
-      patchForm({ name: `${CHANNEL_TYPE_OPTIONS.find((o) => o.value === formValues.type)?.label ?? 'Channel'}_${Date.now()}` })
-    }
+    const channelName =
+      formValues.name.trim() ||
+      `${CHANNEL_TYPE_OPTIONS.find((o) => o.value === formValues.type)?.label ?? 'Channel'}_${Date.now()}`
     const values: ChannelFormValues = {
       ...formValues,
-      name:
-        formValues.name.trim() ||
-        `${CHANNEL_TYPE_OPTIONS.find((o) => o.value === formValues.type)?.label ?? 'Channel'}_${Date.now()}`,
+      name: channelName,
+      group: [channelName],
     }
     setIsSubmitting(true)
     try {
       const payload = transformFormDataToCreatePayload(values)
       const response = await createChannel(payload)
       if (response.success) {
+        try {
+          const latestOptions = await getSystemOptions()
+          const currentGroupRatios = safeJsonParse<Record<string, number>>(
+            latestOptions.data?.find((option) => option.key === 'GroupRatio')
+              ?.value ?? '{}',
+            { fallback: {}, silent: true }
+          )
+          const ratioResponse = await updateSystemOption({
+            key: 'GroupRatio',
+            value: JSON.stringify({
+              ...currentGroupRatios,
+              [channelName]: getQuickAddGroupRatio(groupRatio),
+            }),
+          })
+          if (!ratioResponse.success) {
+            throw new Error(
+              ratioResponse.message || t('Failed to update setting')
+            )
+          }
+        } catch (error: unknown) {
+          toast.error(getErrorMessage(error) || t('Failed to update setting'))
+        }
         toast.success(t(SUCCESS_MESSAGES.CREATED))
-        await queryClient.invalidateQueries({ queryKey: channelsQueryKeys.all })
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: channelsQueryKeys.all }),
+          queryClient.invalidateQueries({ queryKey: ['system-options'] }),
+        ])
         onOpenChange(false)
       } else {
         toast.error(response.message || t('Failed to create channel'))
@@ -347,7 +374,7 @@ export function ChannelQuickAddDialog({
     } finally {
       setIsSubmitting(false)
     }
-  }, [formValues, onOpenChange, patchForm, queryClient, t])
+  }, [formValues, groupRatio, onOpenChange, queryClient, t])
 
   const stepTitle = useMemo(() => {
     switch (step) {
@@ -533,20 +560,28 @@ export function ChannelQuickAddDialog({
 
         {step === 'models' && (
           <div className='space-y-4 py-2'>
-            <div className='space-y-2'>
-              <Label>{t('Groups *')}</Label>
-              {isLoadingGroups ? (
-                <div className='text-muted-foreground text-sm'>
-                  {t('Loading...')}
-                </div>
-              ) : (
-                <MultiSelect
-                  options={groupOptions}
-                  selected={formValues.group}
-                  onChange={(group) => patchForm({ group })}
-                  placeholder={t('default')}
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <div className='space-y-2'>
+                <Label htmlFor='quick-group-name'>{t('Group name')}</Label>
+                <Input
+                  id='quick-group-name'
+                  value={formValues.name.trim()}
+                  placeholder={t('Channel name')}
+                  readOnly
                 />
-              )}
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='quick-group-ratio'>{t('Multiplier')}</Label>
+                <Input
+                  id='quick-group-ratio'
+                  type='number'
+                  min='0'
+                  step='any'
+                  value={groupRatio}
+                  onChange={(event) => setGroupRatio(event.target.value)}
+                  placeholder='1'
+                />
+              </div>
             </div>
             <ChannelUpstreamModelsPanel
               channelType={formValues.type}
@@ -591,7 +626,15 @@ export function ChannelQuickAddDialog({
                       {t('Groups')}
                     </dt>
                     <dd className='text-right font-medium break-all'>
-                      {formatModels(formValues.group) || '—'}
+                      {formValues.name.trim() || '—'}
+                    </dd>
+                  </div>
+                  <div className='flex items-start justify-between gap-3'>
+                    <dt className='text-muted-foreground shrink-0'>
+                      {t('Multiplier')}
+                    </dt>
+                    <dd className='text-right font-medium'>
+                      {getQuickAddGroupRatio(groupRatio)}
                     </dd>
                   </div>
                 </dl>
