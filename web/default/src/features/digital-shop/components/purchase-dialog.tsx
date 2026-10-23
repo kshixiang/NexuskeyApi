@@ -161,7 +161,7 @@ export function DigitalPurchaseDialog({
           {payMethods.length > 0 ? (
             <div className='space-y-2'>
               <Label>{t('Payment method')}</Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v ?? '')}>
                 <SelectTrigger>
                   <SelectValue placeholder={t('Select payment method')} />
                 </SelectTrigger>

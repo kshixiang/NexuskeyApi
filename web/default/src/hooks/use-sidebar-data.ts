@@ -28,6 +28,7 @@ import {
   User,
   Command,
   Radio,
+  HeartPulse,
   FlaskConical,
   MessageSquare,
   CreditCard,
@@ -125,6 +126,11 @@ export function useSidebarData(): SidebarData {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
+          },
+          {
+            title: t('Channel Status'),
+            url: '/channel-status',
+            icon: HeartPulse,
           },
           {
             title: t('Models'),

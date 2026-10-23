@@ -119,7 +119,7 @@ export function DigitalOrdersAdmin() {
       </SectionPageLayout.Description>
       <SectionPageLayout.Actions>
         <Select value={statusFilter} onValueChange={(v) => {
-          setStatusFilter(v)
+          setStatusFilter(v ?? 'all')
           setPage(1)
         }}>
           <SelectTrigger className='w-[180px]'>
