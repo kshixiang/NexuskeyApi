@@ -154,6 +154,7 @@ import { useChannelModelPricing } from '../../hooks/use-channel-model-pricing'
 import { useChannels } from '../channels-provider'
 import { ModelPricingSheet } from '@/features/system-settings/models/model-pricing-sheet'
 import { AddGroupDialog } from '../dialogs/add-group-dialog'
+import { EditGroupDialog } from '../dialogs/edit-group-dialog'
 import { CodexOAuthDialog } from '../dialogs/codex-oauth-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
 import {
@@ -316,6 +317,8 @@ export function ChannelMutateDrawer({
   const [isFetchingModels, setIsFetchingModels] = useState(false)
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false)
   const [addGroupDialogOpen, setAddGroupDialogOpen] = useState(false)
+  const [editGroupDialogOpen, setEditGroupDialogOpen] = useState(false)
+  const [editGroupName, setEditGroupName] = useState<string | null>(null)
   const [channelKey, setChannelKey] = useState<string | null>(null)
   const [isChannelKeyLoading, setIsChannelKeyLoading] = useState(false)
   const [codexOAuthDialogOpen, setCodexOAuthDialogOpen] = useState(false)
@@ -1097,6 +1100,8 @@ export function ChannelMutateDrawer({
         form.reset(CHANNEL_FORM_DEFAULT_VALUES)
         setAdvancedSettingsOpen(false)
         setAddGroupDialogOpen(false)
+        setEditGroupDialogOpen(false)
+        setEditGroupName(null)
       }
     },
     [onOpenChange, form]
@@ -1112,6 +1117,11 @@ export function ChannelMutateDrawer({
     },
     [form]
   )
+
+  const handleGroupEditRequested = useCallback((group: string) => {
+    setEditGroupName(group)
+    setEditGroupDialogOpen(true)
+  }, [])
 
   const handleAdvancedSettingsOpenChange = useCallback((nextOpen: boolean) => {
     setAdvancedSettingsOpen(nextOpen)
@@ -2492,6 +2502,8 @@ export function ChannelMutateDrawer({
                             selected={field.value}
                             onChange={field.onChange}
                             placeholder={t(FIELD_PLACEHOLDERS.GROUP)}
+                            onItemClick={handleGroupEditRequested}
+                            onItemClickLabel={t('Edit group settings')}
                           />
                         )}
                       </FormControl>
@@ -3446,6 +3458,17 @@ export function ChannelMutateDrawer({
           onOpenChange={setAddGroupDialogOpen}
           existingGroups={groupsData?.data || []}
           onCreated={handleGroupCreated}
+        />
+      )}
+
+      {isEditing && (
+        <EditGroupDialog
+          open={editGroupDialogOpen}
+          onOpenChange={(nextOpen) => {
+            setEditGroupDialogOpen(nextOpen)
+            if (!nextOpen) setEditGroupName(null)
+          }}
+          groupName={editGroupName}
         />
       )}
 

@@ -37,6 +37,8 @@ interface MultiSelectProps {
   className?: string
   /** When set, clicking a selected item label opens an action (e.g. model pricing). */
   onItemClick?: (value: string) => void
+  /** Tooltip for the clickable selected item label. */
+  onItemClickLabel?: string
 }
 
 export function MultiSelect({
@@ -46,6 +48,7 @@ export function MultiSelect({
   placeholder,
   className,
   onItemClick,
+  onItemClickLabel,
 }: MultiSelectProps) {
   const { t } = useTranslation()
   const resolvedPlaceholder = placeholder ?? t('Select items...')
@@ -91,7 +94,7 @@ export function MultiSelect({
                   <button
                     type='button'
                     className='hover:text-primary max-w-[12rem] truncate text-left hover:underline'
-                    title={t('Set pricing')}
+                    title={onItemClickLabel ?? t('Set pricing')}
                     onMouseDown={(e) => {
                       e.preventDefault()
                       e.stopPropagation()
