@@ -78,22 +78,23 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 :root {
-  --radius: 0.5rem;
+  /* sub2api-style light theme: teal primary, cool slate surfaces */
+  --radius: 0.75rem;
   --app-header-height: 3rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.981 0.034 237.1);
+  --foreground: oklch(0.207 0.04 261);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.207 0.04 261);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.13 0 0);
+  --popover-foreground: oklch(0.207 0.04 261);
+  --primary: oklch(0.596 0.145 191.4);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.95 0 0);
-  --secondary-foreground: oklch(0.145 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.49 0 0);
-  --accent: oklch(0.95 0 0);
-  --accent-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.965 0.037 243.5);
+  --secondary-foreground: oklch(0.207 0.04 261);
+  --muted: oklch(0.965 0.037 243.5);
+  --muted-foreground: oklch(0.552 0.077 286);
+  --accent: oklch(0.948 0.088 196);
+  --accent-foreground: oklch(0.276 0.057 202.4);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
   --success: oklch(0.596 0.145 163.225);
@@ -104,41 +105,41 @@ For commercial licensing, please contact support@quantumnous.com
   --info-foreground: oklch(0.985 0 0);
   --neutral: oklch(0.708 0 0);
   --neutral-foreground: oklch(0.145 0 0);
-  --border: oklch(0.93 0 0);
-  --input: oklch(0.93 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.925 0.042 256);
+  --input: oklch(0.925 0.042 256);
+  --ring: oklch(0.596 0.145 191.4);
   --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-2: oklch(0.699 0.176 188.6);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.975 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.13 0 0);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.207 0.04 261);
+  --sidebar-primary: oklch(0.596 0.145 191.4);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.92 0 0);
-  --sidebar-accent-foreground: oklch(0.145 0 0);
-  --sidebar-border: oklch(0.93 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --skeleton-base: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.948 0.088 196);
+  --sidebar-accent-foreground: oklch(0.276 0.057 202.4);
+  --sidebar-border: oklch(0.925 0.042 256);
+  --sidebar-ring: oklch(0.596 0.145 191.4);
+  --skeleton-base: oklch(0.965 0.037 243.5);
   --skeleton-highlight: oklch(0.985 0 0);
 }
 
 .dark {
-  /* OpenAI-like dark mode: nearly black chrome, readable raised surfaces. */
-  --background: oklch(0.185 0 0);
-  --foreground: oklch(0.965 0 0);
-  --card: oklch(0.235 0 0);
-  --card-foreground: oklch(0.965 0 0);
-  --popover: oklch(0.255 0 0);
-  --popover-foreground: oklch(0.965 0 0);
-  --primary: oklch(0.965 0 0);
-  --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.285 0 0);
-  --secondary-foreground: oklch(0.965 0 0);
-  --muted: oklch(0.255 0 0);
-  --muted-foreground: oklch(0.76 0 0);
-  --accent: oklch(0.325 0 0);
+  /* sub2api-style dark theme: near-black slate chrome, teal primary */
+  --background: oklch(0.145 0.035 275);
+  --foreground: oklch(0.95 0.01 250);
+  --card: oklch(0.205 0.04 285);
+  --card-foreground: oklch(0.95 0.01 250);
+  --popover: oklch(0.225 0.04 285);
+  --popover-foreground: oklch(0.95 0.01 250);
+  --primary: oklch(0.779 0.192 188.1);
+  --primary-foreground: oklch(0.16 0.03 200);
+  --secondary: oklch(0.278 0.06 285);
+  --secondary-foreground: oklch(0.95 0.01 250);
+  --muted: oklch(0.245 0.05 285);
+  --muted-foreground: oklch(0.708 0.05 280);
+  --accent: oklch(0.31 0.07 285);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0 0);
@@ -152,20 +153,20 @@ For commercial licensing, please contact support@quantumnous.com
   --neutral-foreground: oklch(0.145 0 0);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.68 0 0);
+  --ring: oklch(0.779 0.192 188.1);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.115 0 0);
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.965 0 0);
-  --sidebar-primary-foreground: oklch(0.145 0 0);
-  --sidebar-accent: oklch(0.31 0 0);
+  --sidebar: oklch(0.13 0.03 280);
+  --sidebar-foreground: oklch(0.95 0.01 250);
+  --sidebar-primary: oklch(0.779 0.192 188.1);
+  --sidebar-primary-foreground: oklch(0.16 0.03 200);
+  --sidebar-accent: oklch(0.26 0.05 285);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.68 0 0);
-  --skeleton-base: oklch(0.285 0 0);
-  --skeleton-highlight: oklch(0.39 0 0);
+  --sidebar-ring: oklch(0.779 0.192 188.1);
+  --skeleton-base: oklch(0.278 0.06 285);
+  --skeleton-highlight: oklch(0.37 0.07 285);
 }

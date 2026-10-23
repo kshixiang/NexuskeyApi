@@ -38,13 +38,43 @@ For commercial licensing, please contact support@quantumnous.com
   * {
     @apply border-border outline-ring/50;
     scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  *:hover,
+  *:focus-within {
     scrollbar-color: var(--border) transparent;
   }
   html {
-    @apply overflow-x-hidden font-sans;
+    @apply overflow-x-hidden font-sans scroll-smooth antialiased;
   }
   body {
     @apply bg-background text-foreground has-[div[data-variant='inset']]:bg-sidebar min-h-svh w-full font-sans;
+  }
+
+  /* sub2api-style text selection */
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 25%, transparent);
+    color: var(--foreground);
+  }
+
+  /* sub2api-style thin scrollbars */
+  ::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+    transition: background-color 0.2s ease;
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+  }
+  *:hover::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--muted-foreground) 60%, transparent);
   }
 
   /* Keep sticky headers stable while primitives lock body scrolling. */
@@ -520,6 +550,39 @@ For commercial licensing, please contact support@quantumnous.com
   --ring: oklch(0.72 0.11 158);
   --destructive: oklch(0.65 0.2 25);
   --destructive-foreground: oklch(0.985 0 0);
+}
+
+/* ── sub2api-style brand utilities ── */
+@layer utilities {
+  /* Teal gradient text, like sub2api `.text-gradient` */
+  .text-gradient-teal {
+    background: linear-gradient(135deg, oklch(0.699 0.176 188.6), oklch(0.779 0.192 188.1));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Primary gradient background, like sub2api `bg-gradient-primary` */
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, oklch(0.699 0.176 188.6) 0%, oklch(0.596 0.145 191.4) 100%);
+  }
+
+  /* Soft teal glow, like sub2api `shadow-glow` */
+  .shadow-glow {
+    box-shadow: 0 0 20px oklch(0.699 0.176 188.6 / 0.25);
+  }
+
+  .shadow-glow-lg {
+    box-shadow: 0 0 40px oklch(0.699 0.176 188.6 / 0.35);
+  }
+
+  /* Mesh gradient hero background, sub2api style */
+  .bg-mesh-teal {
+    background-image:
+      radial-gradient(at 40% 20%, oklch(0.699 0.176 188.6 / 0.12) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, oklch(0.696 0.17 200 / 0.08) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, oklch(0.699 0.176 188.6 / 0.08) 0px, transparent 50%);
+  }
 }
 
 /* Micro-interactions — Vercel-style subtle hover/active feedback */

@@ -31,6 +31,7 @@ export function CursorProPromoCard(props: CursorProPromoCardProps) {
   return (
     <Link
       to='/shop/cursor'
+      search={{ pay: undefined, trade_no: undefined }}
       className={cn('group relative block w-full', props.className)}
     >
       <div

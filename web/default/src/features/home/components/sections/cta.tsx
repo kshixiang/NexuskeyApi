@@ -41,9 +41,9 @@ export function CTA(props: CTAProps) {
         className='absolute inset-0 -z-10'
         style={{
           background: [
-            'radial-gradient(ellipse 55% 70% at 50% 100%, oklch(0.42 0.12 158 / 0.35) 0%, transparent 55%)',
-            'radial-gradient(ellipse 40% 50% at 20% 30%, oklch(0.35 0.08 200 / 0.2) 0%, transparent 50%)',
-            'radial-gradient(ellipse 35% 45% at 85% 20%, oklch(0.38 0.1 158 / 0.15) 0%, transparent 50%)',
+            'radial-gradient(ellipse 55% 70% at 50% 100%, oklch(0.596 0.145 191.4 / 0.30) 0%, transparent 55%)',
+            'radial-gradient(ellipse 40% 50% at 20% 30%, oklch(0.596 0.145 191.4 / 0.16) 0%, transparent 50%)',
+            'radial-gradient(ellipse 35% 45% at 85% 20%, oklch(0.699 0.176 188.6 / 0.14) 0%, transparent 50%)',
           ].join(', '),
         }}
       />
@@ -52,7 +52,7 @@ export function CTA(props: CTAProps) {
         className='absolute inset-0 -z-10 opacity-[0.04]'
         style={{
           background:
-            'repeating-linear-gradient(-40deg, transparent, transparent 72px, oklch(0.9 0.1 158) 72px, oklch(0.9 0.1 158) 73px)',
+            'repeating-linear-gradient(-40deg, transparent, transparent 72px, oklch(0.779 0.192 188.1) 72px, oklch(0.779 0.192 188.1) 73px)',
         }}
       />
 
@@ -63,7 +63,7 @@ export function CTA(props: CTAProps) {
         <h2 className='text-2xl leading-tight font-semibold tracking-tight text-balance md:text-4xl'>
           {t('Ready to simplify')}
           <br />
-          <span className='bg-gradient-to-r from-emerald-200 via-teal-200 to-cyan-200 bg-clip-text text-transparent'>
+          <span className='text-gradient-teal'>
             {t('your AI integration?')}
           </span>
         </h2>
@@ -74,7 +74,7 @@ export function CTA(props: CTAProps) {
         </p>
         <div className='mt-9 flex flex-wrap items-center justify-center gap-3'>
           <Button
-            className='group h-11 rounded-md px-6 shadow-[0_0_0_1px_oklch(1_0_0/0.06),0_12px_40px_-16px_oklch(0.55_0.14_158/0.45)]'
+            className='group h-11 rounded-xl px-6 bg-gradient-primary shadow-glow transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-glow-lg'
             render={<Link to='/sign-up' />}
           >
             {t('Get Started')}
@@ -82,7 +82,7 @@ export function CTA(props: CTAProps) {
           </Button>
           <Button
             variant='outline'
-            className='h-11 rounded-md border-white/15 bg-transparent hover:bg-white/[0.06]'
+            className='h-11 rounded-xl border-border/60 bg-transparent hover:bg-accent hover:text-accent-foreground'
             render={<Link to='/pricing' />}
           >
             {t('View Pricing')}

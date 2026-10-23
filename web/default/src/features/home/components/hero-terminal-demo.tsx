@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
-type AccentTone = 'emerald' | 'amber' | 'blue' | 'violet'
+type AccentTone = 'teal' | 'amber' | 'blue' | 'violet'
 
 interface ApiDemoConfig {
   id: string
@@ -43,11 +43,11 @@ const ACCENT_CLASSES: Record<
     badge: string
   }
 > = {
-  emerald: {
-    activeText: 'text-emerald-600 dark:text-emerald-400',
-    activeBorder: 'border-emerald-500 dark:border-emerald-400',
+  teal: {
+    activeText: 'text-teal-600 dark:text-teal-400',
+    activeBorder: 'border-teal-500 dark:border-teal-400',
     badge:
-      'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-400',
+      'bg-teal-500/10 text-teal-600 dark:bg-teal-400/10 dark:text-teal-400',
   },
   amber: {
     activeText: 'text-amber-600 dark:text-amber-400',
@@ -91,7 +91,7 @@ const API_DEMOS: ApiDemoConfig[] = [
     responseHighlights: ['<text>', '<tokens>'],
     tokens: 27,
     latency: 142,
-    accent: 'emerald',
+    accent: 'teal',
   },
   {
     id: 'responses',
@@ -244,7 +244,7 @@ export function HeroTerminalDemo(props: HeroTerminalDemoProps) {
             )
           })}
           <div className='ml-auto flex items-center gap-2 pr-2 sm:pr-3'>
-            <span className='inline-block size-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.45)]' />
+            <span className='inline-block size-1.5 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.45)]' />
             <span className='text-foreground/40 font-mono text-[10px] tracking-wider uppercase'>
               200 ok
             </span>
@@ -504,7 +504,7 @@ function CodeLine(props: { children: ReactNode; indent?: number }) {
 
 function Command(props: { children: ReactNode }) {
   return (
-    <span className='font-medium text-emerald-600 dark:text-emerald-400'>
+    <span className='font-medium text-teal-600 dark:text-teal-400'>
       {props.children}
     </span>
   )

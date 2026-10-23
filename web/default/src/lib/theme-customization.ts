@@ -27,7 +27,7 @@ export const THEME_PRESETS = [
   {
     value: 'default',
     name: 'Default',
-    swatches: ['oklch(0.13 0 0)', 'oklch(0.95 0 0)'],
+    swatches: ['oklch(0.596 0.145 191.4)', 'oklch(0.779 0.192 188.1)'],
   },
   {
     value: 'underground',

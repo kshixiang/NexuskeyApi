@@ -30,7 +30,7 @@ interface HeroProps {
 }
 
 const primaryCtaClassName =
-  'group h-11 rounded-md px-6 shadow-[0_0_0_1px_oklch(1_0_0/0.06),3px_3px_0_0_oklch(0.12_0.02_158/0.85),0_12px_40px_-16px_oklch(0.55_0.14_158/0.45)] transition-[transform,box-shadow] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[0_0_0_1px_oklch(1_0_0/0.06),1px_1px_0_0_oklch(0.12_0.02_158/0.85),0_12px_40px_-16px_oklch(0.55_0.14_158/0.45)]'
+  'group h-11 rounded-xl px-6 bg-gradient-primary shadow-glow transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-glow-lg'
 
 export function Hero(props: HeroProps) {
   const { t } = useTranslation()
@@ -44,9 +44,9 @@ export function Hero(props: HeroProps) {
         className='pointer-events-none absolute inset-0 -z-10'
         style={{
           background: [
-            'radial-gradient(ellipse 55% 45% at 50% -10%, oklch(0.55 0.14 158 / 0.35) 0%, transparent 65%)',
-            'radial-gradient(ellipse 50% 40% at 85% 25%, oklch(0.45 0.12 200 / 0.18) 0%, transparent 60%)',
-            'radial-gradient(ellipse 45% 35% at 10% 40%, oklch(0.5 0.1 158 / 0.12) 0%, transparent 55%)',
+            'radial-gradient(ellipse 55% 45% at 50% -10%, oklch(0.596 0.145 191.4 / 0.30) 0%, transparent 65%)',
+            'radial-gradient(ellipse 50% 40% at 85% 25%, oklch(0.596 0.145 191.4 / 0.16) 0%, transparent 60%)',
+            'radial-gradient(ellipse 45% 35% at 10% 40%, oklch(0.699 0.176 188.6 / 0.12) 0%, transparent 55%)',
           ].join(', '),
         }}
       />
@@ -66,7 +66,7 @@ export function Hero(props: HeroProps) {
         className='absolute inset-0 -z-10 opacity-[0.07]'
         style={{
           background:
-            'repeating-linear-gradient(-35deg, transparent, transparent 80px, oklch(0.85 0.12 158) 80px, oklch(0.85 0.12 158) 81px)',
+            'repeating-linear-gradient(-35deg, transparent, transparent 80px, oklch(0.779 0.192 188.1) 80px, oklch(0.779 0.192 188.1) 81px)',
         }}
       />
       <HeroCodeSymbols />
@@ -93,7 +93,7 @@ export function Hero(props: HeroProps) {
             >
               {t('Stable multi-channel routing,')}
               <br />
-              <span className='bg-gradient-to-r from-emerald-200 via-teal-200 to-cyan-200 bg-clip-text text-transparent'>
+              <span className='text-gradient-teal'>
                 {t('every AI model you need')}
               </span>
             </h1>
