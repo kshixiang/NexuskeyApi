@@ -53,7 +53,12 @@ import {
   textColorMap,
 } from '@/components/status-badge'
 import { getCodexUsage } from '../api'
-import { CHANNEL_STATUS_CONFIG, MODEL_FETCHABLE_TYPES } from '../constants'
+import {
+  CHANNEL_HEALTH_STATUS,
+  CHANNEL_HEALTH_STATUS_CONFIG,
+  CHANNEL_STATUS_CONFIG,
+  MODEL_FETCHABLE_TYPES,
+} from '../constants'
 import {
   formatBalance,
   formatRelativeTime,
@@ -448,6 +453,7 @@ function BalanceCell({ channel }: { channel: Channel }) {
  */
 export function useChannelsColumns(): ColumnDef<Channel>[] {
   const { t } = useTranslation()
+  const { setOpen, setCurrentRow } = useChannels()
   return [
     // Checkbox column
     {
@@ -900,9 +906,27 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
       cell: ({ row }) => {
         const group = row.getValue('group') as string
         const groupArray = parseGroupsList(group)
+        const isTagRow = isTagAggregateRow(row.original)
 
         const groupBadges = groupArray.map((g) => (
-          <GroupBadge key={g} group={g} size='sm' />
+          <GroupBadge
+            key={g}
+            group={g}
+            size='sm'
+            copyable={false}
+            className={
+              isTagRow ? undefined : 'cursor-pointer hover:ring-primary/40'
+            }
+            onClick={
+              isTagRow
+                ? undefined
+                : (e: React.MouseEvent) => {
+                    e.stopPropagation()
+                    setCurrentRow(row.original)
+                    setOpen('update-channel')
+                  }
+            }
+          />
         ))
 
         return (
@@ -1002,6 +1026,68 @@ export function useChannelsColumns(): ColumnDef<Channel>[] {
         )
       },
       size: 110,
+    },
+
+    // Health Status column
+    {
+      accessorKey: 'health_status',
+      meta: { label: t('Health'), mobileHidden: true },
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('Health')} />
+      ),
+      cell: ({ row }) => {
+        const channel = row.original as Channel
+        // Tag aggregate rows have no aggregated health yet
+        if (isTagAggregateRow(row.original)) {
+          return <span className='text-muted-foreground text-xs'>-</span>
+        }
+        const config =
+          CHANNEL_HEALTH_STATUS_CONFIG[
+            channel.health_status as keyof typeof CHANNEL_HEALTH_STATUS_CONFIG
+          ] || CHANNEL_HEALTH_STATUS_CONFIG[0]
+        const badge = (
+          <StatusBadge
+            label={t(config.label)}
+            variant={config.variant}
+            showDot
+            size='sm'
+            copyable={false}
+          />
+        )
+        if (
+          channel.health_status === CHANNEL_HEALTH_STATUS.UNHEALTHY &&
+          channel.last_test_error
+        ) {
+          return (
+            <TooltipProvider delay={100}>
+              <Tooltip>
+                <TooltipTrigger render={<span />}>{badge}</TooltipTrigger>
+                <TooltipContent side='top' className='max-w-xs'>
+                  <div className='space-y-1 text-xs'>
+                    <div className='break-all'>{channel.last_test_error}</div>
+                    {channel.test_time ? (
+                      <div className='text-muted-foreground'>
+                        {formatTimestampToDate(channel.test_time)}
+                      </div>
+                    ) : null}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )
+        }
+        return badge
+      },
+      filterFn: (row, id, value) => {
+        if (!value || value.length === 0 || value.includes('all')) return true
+        const health = row.getValue(id) as number
+        if (value.includes('healthy')) return health === 1
+        if (value.includes('unhealthy')) return health === 2
+        if (value.includes('unknown')) return health === 0
+        return false
+      },
+      size: 100,
+      enableSorting: false,
     },
 
     // Test Time column

@@ -151,6 +151,31 @@ export const CHANNEL_STATUS_CONFIG = {
 }
 
 // ============================================================================
+// Channel Health Status (from channel tests; label values are i18n keys)
+// ============================================================================
+
+export const CHANNEL_HEALTH_STATUS = {
+  UNKNOWN: 0,
+  HEALTHY: 1,
+  UNHEALTHY: 2,
+} as const
+
+export const CHANNEL_HEALTH_STATUS_CONFIG = {
+  [CHANNEL_HEALTH_STATUS.UNKNOWN]: {
+    variant: 'neutral' as const,
+    label: 'Not Tested',
+  },
+  [CHANNEL_HEALTH_STATUS.HEALTHY]: {
+    variant: 'success' as const,
+    label: 'Healthy',
+  },
+  [CHANNEL_HEALTH_STATUS.UNHEALTHY]: {
+    variant: 'danger' as const,
+    label: 'Unhealthy',
+  },
+} as const
+
+// ============================================================================
 // Multi-Key Status
 // ============================================================================
 

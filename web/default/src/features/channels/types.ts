@@ -64,6 +64,9 @@ export const channelSchema = z.object({
   header_override: z.string().nullish(),
   remark: z.string().default(''),
   max_input_tokens: z.number().default(0),
+  health_status: z.number().default(0), // 0: unknown, 1: healthy, 2: unhealthy
+  last_test_error: z.string().default(''),
+  last_test_status: z.number().default(0), // 1: last test succeeded, 2: last test failed
   channel_info: channelInfoSchema.default({
     is_multi_key: false,
     multi_key_size: 0,

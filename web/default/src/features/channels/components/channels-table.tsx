@@ -110,6 +110,7 @@ export function ChannelsTable() {
       { columnId: 'type', searchKey: 'type', type: 'array' },
       { columnId: 'group', searchKey: 'group', type: 'array' },
       { columnId: 'model', searchKey: 'model', type: 'string' },
+      { columnId: 'health_status', searchKey: 'health', type: 'array' },
     ],
   })
 
@@ -410,6 +411,17 @@ export function ChannelsTable() {
             columnId: 'group',
             title: t('Group'),
             options: groupFilterOptions,
+            singleSelect: true,
+          },
+          {
+            columnId: 'health_status',
+            title: t('Health'),
+            options: [
+              { value: 'all', label: t('All Status') },
+              { value: 'healthy', label: t('Healthy') },
+              { value: 'unhealthy', label: t('Unhealthy') },
+              { value: 'unknown', label: t('Not Tested') },
+            ],
             singleSelect: true,
           },
         ],
