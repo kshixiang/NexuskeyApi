@@ -97,6 +97,9 @@ func main() {
 		go model.SyncChannelCache(common.SyncFrequency)
 	}
 
+	// prune old channel test history rows (default 30 days)
+	go model.CleanupChannelTestHistory(30 * 24 * 3600)
+
 	// 热更新配置
 	go model.SyncOptions(common.SyncFrequency)
 

@@ -52,6 +52,11 @@ type Channel struct {
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
+	// health status: 0 unknown, 1 healthy, 2 unhealthy (set by channel tests)
+	HealthStatus   int    `json:"health_status" gorm:"default:0"`
+	LastTestError  string `json:"last_test_error" gorm:"type:varchar(512);default:''"`
+	LastTestStatus int    `json:"last_test_status" gorm:"default:0"` // 1: last test succeeded, 2: last test failed
+
 	OtherSettings string `json:"settings" gorm:"column:settings"` // 其他设置，存储azure版本等不需要检索的信息，详见dto.ChannelOtherSettings
 
 	// cache info
@@ -563,6 +568,29 @@ func (channel *Channel) UpdateResponseTime(responseTime int64) {
 	}).Error
 	if err != nil {
 		common.SysLog(fmt.Sprintf("failed to update response time: channel_id=%d, error=%v", channel.Id, err))
+	}
+}
+
+// UpdateHealthStatus records the outcome of a channel test.
+// success -> healthy(1); failure -> unhealthy(2) with truncated error message.
+func (channel *Channel) UpdateHealthStatus(success bool, errMsg string) {
+	healthStatus := 2
+	lastTestStatus := 2
+	if success {
+		healthStatus = 1
+		lastTestStatus = 1
+		errMsg = ""
+	}
+	if len(errMsg) > 512 {
+		errMsg = errMsg[:512]
+	}
+	err := DB.Model(channel).Select("health_status", "last_test_error", "last_test_status").Updates(Channel{
+		HealthStatus:   healthStatus,
+		LastTestError:  errMsg,
+		LastTestStatus: lastTestStatus,
+	}).Error
+	if err != nil {
+		common.SysLog(fmt.Sprintf("failed to update channel health status: channel_id=%d, error=%v", channel.Id, err))
 	}
 }
 

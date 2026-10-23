@@ -851,6 +851,13 @@ func TestChannel(c *gin.Context) {
 	tok := time.Now()
 	milliseconds := tok.Sub(tik).Milliseconds()
 	go channel.UpdateResponseTime(milliseconds)
+	recordChannelTestHistory(channel, milliseconds, isStream, testModel, result)
+	// record health status from manual test outcome
+	if result.newAPIError != nil {
+		channel.UpdateHealthStatus(false, result.newAPIError.Error())
+	} else {
+		channel.UpdateHealthStatus(true, "")
+	}
 	consumedTime := float64(milliseconds) / 1000.0
 	if result.newAPIError != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -933,6 +940,13 @@ func testAllChannels(notify bool) error {
 			}
 
 			channel.UpdateResponseTime(milliseconds)
+			recordChannelTestHistory(channel, milliseconds, shouldUseStreamForAutomaticChannelTest(channel), "", result)
+			// record health status from test outcome
+			if newAPIError != nil {
+				channel.UpdateHealthStatus(false, newAPIError.Error())
+			} else {
+				channel.UpdateHealthStatus(true, "")
+			}
 			time.Sleep(common.RequestInterval)
 		}
 
@@ -954,6 +968,29 @@ func TestAllChannels(c *gin.Context) {
 		"message": "",
 	})
 }
+
+// recordChannelTestHistory persists one test outcome for the status dashboard.
+func recordChannelTestHistory(channel *model.Channel, responseTimeMs int64, isStream bool, testModel string, result testResult) {
+	record := &model.ChannelTestHistory{
+		ChannelId:      channel.Id,
+		ResponseTimeMs: responseTimeMs,
+		IsStream:       isStream,
+		TestModel:      testModel,
+	}
+	if result.newAPIError != nil {
+		record.Success = false
+		record.ErrorMessage = result.newAPIError.Error()
+	} else if result.localErr != nil {
+		record.Success = false
+		record.ErrorMessage = result.localErr.Error()
+	} else {
+		record.Success = true
+	}
+	gopool.Go(func() {
+		model.RecordChannelTestHistory(record)
+	})
+}
+
 
 var autoTestChannelsOnce sync.Once
 
