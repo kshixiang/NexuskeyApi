@@ -193,5 +193,7 @@
   "Your payment is being confirmed. This page will update automatically.": "Your payment is being confirmed. This page will update automatically.",
   "After payment, we will send account credentials to your contact within 24 hours.": "After payment, we will send account credentials to your contact within 24 hours.",
   "e.g. Sent account via email": "e.g. Sent account via email",
-  "{{total}} orders": "{{total}} orders"
+  "{{total}} orders": "{{total}} orders",
+  "First Token": "首 Token",
+  "{{count}} tests": "{{count}} 次测试"
 }

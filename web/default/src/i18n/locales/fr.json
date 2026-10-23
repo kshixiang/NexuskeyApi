@@ -1794,6 +1794,9 @@
     "Header Value (supports string or JSON mapping)": "Valeur de l'en-tête (chaîne ou mappage JSON)",
     "Header navigation": "Navigation d'en-tête",
     "Health": "Santé",
+    "Healthy": "Sain",
+    "Unhealthy": "Anormal",
+    "Not Tested": "Non testé",
     "Hidden — verify to reveal": "Masqué — vérifiez pour révéler",
     "Hide": "Masquer",
     "Hide API key": "Masquer la clé API",
@@ -4512,6 +4515,20 @@
     "Your payment is being confirmed. This page will update automatically.": "Your payment is being confirmed. This page will update automatically.",
     "After payment, we will send account credentials to your contact within 24 hours.": "After payment, we will send account credentials to your contact within 24 hours.",
     "e.g. Sent account via email": "e.g. Sent account via email",
-    "{{total}} orders": "{{total}} orders"
+    "{{total}} orders": "{{total}} orders",
+    "Channel Status": "渠道状态",
+    "Availability, cache rate and latency of each channel over the selected window": "所选时间窗内每个渠道的可用率、缓存率与延迟",
+    "Updated at": "更新于",
+    "Loading…": "加载中…",
+    "Failed to load channel status": "加载渠道状态失败",
+    "No test records yet. Enable automatic channel testing or run a manual test first.": "暂无测试记录。请先启用渠道自动测试或手动测试一次。",
+    "Availability": "可用率",
+    "Cache Rate": "缓存率",
+    "First Token": "首 Token",
+    "Past": "过去",
+    "Now": "现在",
+    "{{count}} tests": "{{count}} 次测试",
+    "Edit group": "Modifier le groupe",
+    "Edit group settings": "Modifier les paramètres du groupe"
   }
 }

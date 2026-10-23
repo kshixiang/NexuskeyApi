@@ -98,5 +98,7 @@
   "smtp.example.com": "smtp.example.com",
   "socks5://user:pass@host:port": "socks5://user:pass@host:port",
   "whsec_xxx": "whsec_xxx",
-  "{\"original-model\": \"replacement-model\"}": "{\"original-model\": \"replacement-model\"}"
+  "{\"original-model\": \"replacement-model\"}": "{\"original-model\": \"replacement-model\"}",
+  "First Token": "首 Token",
+  "{{count}} tests": "{{count}} 次测试"
 }
