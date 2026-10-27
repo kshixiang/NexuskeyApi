@@ -31,6 +31,9 @@ const EMPTY_MODEL = {
   name: '',
   billingMode: 'per-token',
   fixedPrice: '',
+  fixedInputPrice: '',
+  fixedOutputPrice: '',
+  fixedCachePrice: '',
   inputPrice: '',
   completionPrice: '',
   lockedCompletionRatio: '',
@@ -123,6 +126,19 @@ const normalizeCompletionRatioMeta = (rawMeta) => {
 
 const buildModelState = (name, sourceMaps) => {
   const billingMode = sourceMaps.ModelBillingMode?.[name];
+  if (billingMode === 'fixed_token') {
+    const fixedPrice = sourceMaps.FixedTokenPrice?.[name] || {};
+    return {
+      ...EMPTY_MODEL,
+      name,
+      billingMode,
+      fixedInputPrice: toNumericString(fixedPrice.input),
+      fixedOutputPrice: toNumericString(fixedPrice.output),
+      fixedCachePrice: toNumericString(fixedPrice.cache),
+      rawRatios: { ...EMPTY_MODEL.rawRatios },
+      hasConflict: false,
+    };
+  }
   if (billingMode === 'tiered_expr') {
     const fullBillingExpr = sourceMaps.ModelBillingExpr?.[name] || '';
     const { billingExpr, requestRuleExpr } =
@@ -224,7 +240,7 @@ const buildModelState = (name, sourceMaps) => {
 };
 
 export const isBasePricingUnset = (model) =>
-  model.billingMode !== 'tiered_expr' &&
+  model.billingMode !== 'tiered_expr' && model.billingMode !== 'fixed_token' &&
   !hasValue(model.fixedPrice) && !hasValue(model.inputPrice);
 
 export const getModelWarnings = (model, t) => {
@@ -303,6 +319,10 @@ export const buildSummaryText = (model, t) => {
     return `${t('阶梯计费')} (${tierCount} ${t('档')})${requestRuleSuffix}`;
   }
 
+  if (model.billingMode === 'fixed_token') {
+    return `${t('固定 Token 价格')} $${model.fixedInputPrice || 0} / 1M${requestRuleSuffix}`;
+  }
+
   if (model.billingMode === 'per-request' && hasValue(model.fixedPrice)) {
     return `${t('按次')} $${model.fixedPrice} / ${t('次')}${requestRuleSuffix}`;
   }
@@ -351,6 +371,18 @@ const serializeModel = (model, t) => {
       result.ModelPrice = toNormalizedNumber(model.fixedPrice);
     }
     return result;
+  }
+
+  if (model.billingMode === 'fixed_token') {
+    return [
+      ['ModelFixedTokenInputPrice', model.fixedInputPrice],
+      ['ModelFixedTokenOutputPrice', model.fixedOutputPrice],
+      ['ModelFixedTokenCachePrice', model.fixedCachePrice],
+    ].map(([key, value]) => ({
+      key,
+      label: key,
+      value: hasValue(value) ? value : t('空'),
+    }));
   }
 
   const inputPrice = toNumberOrNull(model.inputPrice);
@@ -648,6 +680,7 @@ export function useModelPricingEditorState({
       AudioCompletionRatio: parseOptionJSON(options.AudioCompletionRatio),
       ModelBillingMode: parseOptionJSON(options['billing_setting.billing_mode']),
       ModelBillingExpr: parseOptionJSON(options['billing_setting.billing_expr']),
+      FixedTokenPrice: parseOptionJSON(options['billing_setting.fixed_token_price']),
     };
 
     const names = new Set([
@@ -663,6 +696,7 @@ export function useModelPricingEditorState({
       ...Object.keys(sourceMaps.AudioCompletionRatio),
       ...Object.keys(sourceMaps.ModelBillingMode),
       ...Object.keys(sourceMaps.ModelBillingExpr),
+      ...Object.keys(sourceMaps.FixedTokenPrice),
     ]);
 
     const nextModels = Array.from(names)
@@ -963,6 +997,9 @@ export function useModelPricingEditorState({
         const nextModel = {
           ...model,
           billingMode: selectedModel.billingMode,
+          fixedInputPrice: selectedModel.fixedInputPrice,
+          fixedOutputPrice: selectedModel.fixedOutputPrice,
+          fixedCachePrice: selectedModel.fixedCachePrice,
           fixedPrice: selectedModel.fixedPrice,
           inputPrice: selectedModel.inputPrice,
           completionPrice: selectedModel.completionPrice,
@@ -1037,9 +1074,18 @@ export function useModelPricingEditorState({
       const tieredOutput = {
         'billing_setting.billing_mode': {},
         'billing_setting.billing_expr': {},
+        'billing_setting.fixed_token_price': {},
       };
 
       for (const model of models) {
+        if (model.billingMode === 'fixed_token') {
+          tieredOutput['billing_setting.billing_mode'][model.name] = 'fixed_token';
+          tieredOutput['billing_setting.fixed_token_price'][model.name] = {
+            input: Number(model.fixedInputPrice || 0),
+            output: Number(model.fixedOutputPrice || 0),
+            cache: Number(model.fixedCachePrice || 0),
+          };
+        }
         if (model.billingMode === 'tiered_expr') {
           const finalBillingExpr = combineBillingExpr(
             model.billingExpr,

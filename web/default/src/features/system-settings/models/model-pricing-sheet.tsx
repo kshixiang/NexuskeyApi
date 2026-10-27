@@ -81,13 +81,16 @@ const createModelPricingSchema = (t: (key: string) => string) =>
     imageRatio: z.string().optional(),
     audioRatio: z.string().optional(),
     audioCompletionRatio: z.string().optional(),
+    fixedInputPrice: z.string().optional(),
+    fixedOutputPrice: z.string().optional(),
+    fixedCachePrice: z.string().optional(),
   })
 
 type ModelPricingFormValues = z.infer<
   ReturnType<typeof createModelPricingSchema>
 >
 
-type PricingMode = 'per-token' | 'per-request' | 'tiered_expr'
+type PricingMode = 'per-token' | 'fixed_token' | 'per-request' | 'tiered_expr'
 type LaneKey =
   | 'completion'
   | 'cache'
@@ -109,6 +112,9 @@ export type ModelRatioData = {
   billingMode?: PricingMode
   billingExpr?: string
   requestRuleExpr?: string
+  fixedInputPrice?: string
+  fixedOutputPrice?: string
+  fixedCachePrice?: string
 }
 
 type ModelPricingSheetProps = {
@@ -278,6 +284,7 @@ function createInitialLaneState(data?: ModelRatioData | null) {
 
 function getModeLabel(mode: PricingMode) {
   if (mode === 'per-request') return 'Per-request'
+  if (mode === 'fixed_token') return 'Fixed token price'
   if (mode === 'tiered_expr') return 'Expression'
   return 'Per-token'
 }
@@ -320,6 +327,14 @@ function buildPreviewRows(
         label: 'ModelPrice',
         value: values.price || t('Empty'),
       },
+    ]
+  }
+
+  if (mode === 'fixed_token') {
+    return [
+      { key: 'fixedInput', label: t('Input price'), value: values.fixedInputPrice || t('Empty') },
+      { key: 'fixedOutput', label: t('Completion price'), value: values.fixedOutputPrice || t('Empty') },
+      { key: 'fixedCache', label: t('Cache read price'), value: values.fixedCachePrice || t('Empty') },
     ]
   }
 
@@ -448,6 +463,9 @@ export function ModelPricingEditorPanel({
       imageRatio: '',
       audioRatio: '',
       audioCompletionRatio: '',
+      fixedInputPrice: '',
+      fixedOutputPrice: '',
+      fixedCachePrice: '',
     },
   })
 
@@ -465,11 +483,16 @@ export function ModelPricingEditorPanel({
         imageRatio: data.imageRatio || '',
         audioRatio: data.audioRatio || '',
         audioCompletionRatio: data.audioCompletionRatio || '',
+        fixedInputPrice: data.fixedInputPrice || '',
+        fixedOutputPrice: data.fixedOutputPrice || '',
+        fixedCachePrice: data.fixedCachePrice || '',
       })
       setPricingMode(
         data.billingMode === 'tiered_expr'
           ? 'tiered_expr'
-          : data.price
+          : data.billingMode === 'fixed_token'
+            ? 'fixed_token'
+            : data.price
             ? 'per-request'
             : 'per-token'
       )
@@ -499,6 +522,9 @@ export function ModelPricingEditorPanel({
       imageRatio: '',
       audioRatio: '',
       audioCompletionRatio: '',
+      fixedInputPrice: '',
+      fixedOutputPrice: '',
+      fixedCachePrice: '',
     })
     setPricingMode('per-token')
     setBillingExpr('')
@@ -783,6 +809,9 @@ export function ModelPricingEditorPanel({
       imageRatio: values.imageRatio || '',
       audioRatio: values.audioRatio || '',
       audioCompletionRatio: values.audioCompletionRatio || '',
+      fixedInputPrice: values.fixedInputPrice || '',
+      fixedOutputPrice: values.fixedOutputPrice || '',
+      fixedCachePrice: values.fixedCachePrice || '',
     }
 
     if (pricingMode === 'tiered_expr') {
@@ -879,8 +908,11 @@ export function ModelPricingEditorPanel({
               />
 
               <Tabs value={pricingMode} onValueChange={handleModeChange}>
-                <TabsList className='grid w-full grid-cols-3'>
+                <TabsList className='grid w-full grid-cols-4'>
                   <TabsTrigger value='per-token'>{t('Per-token')}</TabsTrigger>
+                  <TabsTrigger value='fixed_token'>
+                    {t('Fixed token price')}
+                  </TabsTrigger>
                   <TabsTrigger value='per-request'>
                     {t('Per-request')}
                   </TabsTrigger>
@@ -888,6 +920,38 @@ export function ModelPricingEditorPanel({
                     {t('Expression')}
                   </TabsTrigger>
                 </TabsList>
+
+                <TabsContent value='fixed_token' className='flex flex-col gap-5'>
+                  <FieldGroup>
+                    {([
+                      ['fixedInputPrice', 'Input price'],
+                      ['fixedOutputPrice', 'Completion price'],
+                      ['fixedCachePrice', 'Cache read price'],
+                    ] as const).map(([field, label]) => (
+                      <Field key={field}>
+                        <FieldLabel>{t(label)}</FieldLabel>
+                        <InputGroup>
+                          <InputGroupAddon>$</InputGroupAddon>
+                          <InputGroupInput
+                            inputMode='decimal'
+                            placeholder='0'
+                            value={watchedValues[field] || ''}
+                            onChange={(event) => {
+                              const value = event.target.value
+                              if (numericDraftRegex.test(value)) {
+                                setFormValue(field, value)
+                              }
+                            }}
+                          />
+                          <InputGroupAddon align='inline-end'>$/1M</InputGroupAddon>
+                        </InputGroup>
+                        <FieldDescription>
+                          {t('USD price per 1M tokens. Model multipliers are not applied.')}
+                        </FieldDescription>
+                      </Field>
+                    ))}
+                  </FieldGroup>
+                </TabsContent>
 
                 <TabsContent value='per-token' className='flex flex-col gap-5'>
                   <FieldGroup>

@@ -68,6 +68,16 @@ func cacheWriteTokensTotal(summary textQuotaSummary) int {
 	return summary.CacheCreationTokens
 }
 
+func calculateFixedTokenQuota(inputTokens, outputTokens, cachedInputTokens int, price types.FixedTokenPrice, groupRatio float64) int {
+	cost := decimal.NewFromInt(int64(inputTokens)).Mul(decimal.NewFromFloat(price.Input))
+	cost = cost.Add(decimal.NewFromInt(int64(outputTokens)).Mul(decimal.NewFromFloat(price.Output)))
+	cost = cost.Add(decimal.NewFromInt(int64(cachedInputTokens)).Mul(decimal.NewFromFloat(price.Cache)))
+	quota := cost.Div(decimal.NewFromInt(1_000_000)).
+		Mul(decimal.NewFromFloat(common.QuotaPerUnit)).
+		Mul(decimal.NewFromFloat(groupRatio))
+	return int(quota.Round(0).IntPart())
+}
+
 func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *dto.Usage) bool {
 	if relayInfo == nil || usage == nil {
 		return false
@@ -229,7 +239,36 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	summary.ToolCallSurchargeQuota = calculateTextToolCallSurcharge(ctx, relayInfo, &summary)
 
 	var audioInputQuota decimal.Decimal
-	if !relayInfo.PriceData.UsePrice {
+	if relayInfo.PriceData.UseFixedTokenPrice {
+		baseTokens := dPromptTokens
+		if !summary.IsClaudeUsageSemantic && !legacyClaudeDerived {
+			baseTokens = baseTokens.Sub(dCacheTokens).Sub(dCachedCreationTokens)
+			baseTokens = baseTokens.Sub(dImageTokens)
+		}
+		baseTokens = baseTokens.Add(dCachedCreationTokens).Add(dImageTokens)
+		quotaCost := baseTokens.Mul(decimal.NewFromFloat(relayInfo.PriceData.FixedTokenPrice.Input))
+		cachePrice := relayInfo.PriceData.FixedTokenPrice.Cache
+		quotaCost = quotaCost.Add(dCacheTokens.Mul(decimal.NewFromFloat(cachePrice)))
+		quotaCost = quotaCost.Add(dCompletionTokens.Mul(decimal.NewFromFloat(relayInfo.PriceData.FixedTokenPrice.Output)))
+		if !dAudioTokens.IsZero() {
+			summary.AudioInputPrice = operation_setting.GetGeminiInputAudioPricePerMillionTokens(summary.ModelName)
+			if summary.AudioInputPrice > 0 {
+				baseTokens = baseTokens.Sub(dAudioTokens)
+				quotaCost = quotaCost.Sub(dAudioTokens.Mul(decimal.NewFromFloat(relayInfo.PriceData.FixedTokenPrice.Input)))
+				audioInputQuota = decimal.NewFromFloat(summary.AudioInputPrice).
+					Div(decimal.NewFromInt(1_000_000)).Mul(dAudioTokens).Mul(dQuotaPerUnit).Mul(dGroupRatio)
+			}
+		}
+		quotaCalculateDecimal := quotaCost.Div(decimal.NewFromInt(1_000_000)).
+			Mul(dQuotaPerUnit).Mul(dGroupRatio).
+			Add(summary.ToolCallSurchargeQuota).Add(audioInputQuota)
+		if len(relayInfo.PriceData.OtherRatios) > 0 {
+			for _, otherRatio := range relayInfo.PriceData.OtherRatios {
+				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
+			}
+		}
+		summary.Quota = int(quotaCalculateDecimal.Round(0).IntPart())
+	} else if !relayInfo.PriceData.UsePrice {
 		baseTokens := dPromptTokens
 
 		var cachedTokensWithRatio decimal.Decimal

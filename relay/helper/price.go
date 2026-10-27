@@ -70,7 +70,11 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	groupRatioInfo := HandleGroupRatio(c, info)
 
 	// Check if this model uses tiered_expr billing
-	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
+	billingMode := billing_setting.GetBillingMode(info.OriginModelName)
+	if billingMode == billing_setting.BillingModeFixedToken {
+		return modelPriceHelperFixedToken(info, promptTokens, meta, groupRatioInfo)
+	}
+	if billingMode == billing_setting.BillingModeTieredExpr {
 		return modelPriceHelperTiered(c, info, promptTokens, meta, groupRatioInfo)
 	}
 
@@ -161,6 +165,44 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	}
 	info.PriceData = priceData
 	return priceData, nil
+}
+
+func modelPriceHelperFixedToken(info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {
+	price, ok := billing_setting.GetFixedTokenPrice(info.OriginModelName)
+	if !ok {
+		return types.PriceData{}, fmt.Errorf("model %s is configured as fixed_token but has no fixed token prices", info.OriginModelName)
+	}
+	if price.Input < 0 || price.Output < 0 || price.Cache < 0 {
+		return types.PriceData{}, fmt.Errorf("model %s has a negative fixed token price", info.OriginModelName)
+	}
+
+	inputTokens := common.Max(promptTokens, common.PreConsumedQuota)
+	preConsumedQuota := int((float64(inputTokens)*price.Input + float64(meta.MaxTokens)*price.Output) / 1_000_000 * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
+	freeModel := !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume &&
+		(groupRatioInfo.GroupRatio == 0 || (price.Input == 0 && price.Output == 0 && price.Cache == 0))
+	if freeModel {
+		preConsumedQuota = 0
+	}
+
+	priceData := types.PriceData{
+		FreeModel:          freeModel,
+		UseFixedTokenPrice: true,
+		FixedTokenPrice:    price,
+		ModelRatio:         price.Input * common.QuotaPerUnit / 1_000_000,
+		CompletionRatio:    fixedTokenPriceRatio(price.Output, price.Input),
+		CacheRatio:         fixedTokenPriceRatio(price.Cache, price.Input),
+		GroupRatioInfo:     groupRatioInfo,
+		QuotaToPreConsume:  preConsumedQuota,
+	}
+	info.PriceData = priceData
+	return priceData, nil
+}
+
+func fixedTokenPriceRatio(price, inputPrice float64) float64 {
+	if inputPrice == 0 {
+		return 0
+	}
+	return price / inputPrice
 }
 
 // ModelPriceHelperPerCall 按次/按量计费的 PriceHelper (MJ、Task)

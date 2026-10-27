@@ -5,26 +5,31 @@ import (
 
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/samber/lo"
 )
 
 const (
 	BillingModeRatio      = "ratio"
 	BillingModeTieredExpr = "tiered_expr"
+	BillingModeFixedToken = "fixed_token"
 	BillingModeField      = "billing_mode"
 	BillingExprField      = "billing_expr"
+	FixedTokenPriceField  = "fixed_token_price"
 )
 
 // BillingSetting is managed by config.GlobalConfig.Register.
 // DB keys: billing_setting.billing_mode, billing_setting.billing_expr
 type BillingSetting struct {
-	BillingMode map[string]string `json:"billing_mode"`
-	BillingExpr map[string]string `json:"billing_expr"`
+	BillingMode     map[string]string                `json:"billing_mode"`
+	BillingExpr     map[string]string                `json:"billing_expr"`
+	FixedTokenPrice map[string]types.FixedTokenPrice `json:"fixed_token_price"`
 }
 
 var billingSetting = BillingSetting{
-	BillingMode: make(map[string]string),
-	BillingExpr: make(map[string]string),
+	BillingMode:     make(map[string]string),
+	BillingExpr:     make(map[string]string),
+	FixedTokenPrice: make(map[string]types.FixedTokenPrice),
 }
 
 func init() {
@@ -47,6 +52,15 @@ func GetBillingExpr(model string) (string, bool) {
 	return expr, ok
 }
 
+func GetFixedTokenPrice(model string) (types.FixedTokenPrice, bool) {
+	price, ok := billingSetting.FixedTokenPrice[model]
+	return price, ok
+}
+
+func GetFixedTokenPriceCopy() map[string]types.FixedTokenPrice {
+	return lo.Assign(billingSetting.FixedTokenPrice)
+}
+
 func GetBillingModeCopy() map[string]string {
 	return lo.Assign(billingSetting.BillingMode)
 }
@@ -56,12 +70,15 @@ func GetBillingExprCopy() map[string]string {
 }
 
 func GetPricingSyncData(base map[string]any) map[string]any {
-	extra := make(map[string]any, 2)
+	extra := make(map[string]any, 3)
 	if modes := GetBillingModeCopy(); len(modes) > 0 {
 		extra[BillingModeField] = modes
 	}
 	if exprs := GetBillingExprCopy(); len(exprs) > 0 {
 		extra[BillingExprField] = exprs
+	}
+	if prices := GetFixedTokenPriceCopy(); len(prices) > 0 {
+		extra[FixedTokenPriceField] = prices
 	}
 	return lo.Assign(base, extra)
 }

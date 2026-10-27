@@ -78,6 +78,7 @@ export type ModelPricingOptionsSnapshot = {
   AudioCompletionRatio: string
   'billing_setting.billing_mode': string
   'billing_setting.billing_expr': string
+  'billing_setting.fixed_token_price': string
 }
 
 const PRICING_OPTION_KEYS: Array<keyof ModelPricingOptionsSnapshot> = [
@@ -91,6 +92,7 @@ const PRICING_OPTION_KEYS: Array<keyof ModelPricingOptionsSnapshot> = [
   'AudioCompletionRatio',
   'billing_setting.billing_mode',
   'billing_setting.billing_expr',
+  'billing_setting.fixed_token_price',
 ]
 
 export function emptyModelPricingSnapshot(): ModelPricingOptionsSnapshot {
@@ -105,6 +107,7 @@ export function emptyModelPricingSnapshot(): ModelPricingOptionsSnapshot {
     AudioCompletionRatio: '{}',
     'billing_setting.billing_mode': '{}',
     'billing_setting.billing_expr': '{}',
+    'billing_setting.fixed_token_price': '{}',
   }
 }
 
@@ -164,6 +167,12 @@ function parseMaps(snapshot: ModelPricingOptionsSnapshot) {
       snapshot['billing_setting.billing_expr'],
       { fallback: {}, silent: true }
     ),
+    fixedTokenPriceMap: safeJsonParse<
+      Record<string, { input: number; output: number; cache: number }>
+    >(snapshot['billing_setting.fixed_token_price'], {
+      fallback: {},
+      silent: true,
+    }),
   }
 }
 
@@ -187,6 +196,19 @@ export function loadModelPricingData(
   const price = maps.priceMap[modelName]?.toString() || ''
   const ratio = maps.ratioMap[modelName]?.toString() || ''
   const modeForModel = maps.billingModeMap[modelName]
+
+  if (modeForModel === 'fixed_token') {
+    const fixedPrice = maps.fixedTokenPriceMap[modelName]
+    return {
+      name: modelName,
+      billingMode: 'fixed_token',
+      fixedInputPrice: fixedPrice?.input?.toString() || '',
+      fixedOutputPrice: fixedPrice?.output?.toString() || '',
+      fixedCachePrice: fixedPrice?.cache?.toString() || '',
+      price,
+      ratio,
+    }
+  }
 
   if (modeForModel === 'tiered_expr') {
     const fullExpr = maps.billingExprMap[modelName] || ''
@@ -266,8 +288,22 @@ export function mergeModelPricingData(
     delete maps.audioCompletionMap[name]
     delete maps.billingModeMap[name]
     delete maps.billingExprMap[name]
+    delete maps.fixedTokenPriceMap[name]
 
-    if (data.billingMode === 'tiered_expr') {
+    if (data.billingMode === 'fixed_token') {
+      const input = Number(data.fixedInputPrice)
+      const output = Number(data.fixedOutputPrice)
+      const cache = Number(data.fixedCachePrice)
+      if ([input, output, cache].every(Number.isFinite)) {
+        maps.billingModeMap[name] = 'fixed_token'
+        maps.fixedTokenPriceMap[name] = { input, output, cache }
+        if (input > 0) {
+          maps.ratioMap[name] = input / 2
+          maps.completionMap[name] = output / input
+          maps.cacheMap[name] = cache / input
+        }
+      }
+    } else if (data.billingMode === 'tiered_expr') {
       const combined = combineBillingExpr(
         data.billingExpr || '',
         data.requestRuleExpr || ''
@@ -308,6 +344,11 @@ export function mergeModelPricingData(
     AudioCompletionRatio: JSON.stringify(maps.audioCompletionMap, null, 2),
     'billing_setting.billing_mode': JSON.stringify(maps.billingModeMap, null, 2),
     'billing_setting.billing_expr': JSON.stringify(maps.billingExprMap, null, 2),
+    'billing_setting.fixed_token_price': JSON.stringify(
+      maps.fixedTokenPriceMap,
+      null,
+      2
+    ),
   }
 
   const updates: UpdateOptionRequest[] = []

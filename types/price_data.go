@@ -8,6 +8,12 @@ type GroupRatioInfo struct {
 	HasSpecialRatio   bool
 }
 
+type FixedTokenPrice struct {
+	Input  float64 `json:"input"`
+	Output float64 `json:"output"`
+	Cache  float64 `json:"cache"`
+}
+
 type PriceData struct {
 	FreeModel            bool
 	ModelPrice           float64
@@ -22,6 +28,8 @@ type PriceData struct {
 	AudioCompletionRatio float64
 	OtherRatios          map[string]float64
 	UsePrice             bool
+	UseFixedTokenPrice   bool
+	FixedTokenPrice      FixedTokenPrice
 	Quota                int // 按次计费的最终额度（MJ / Task）
 	QuotaToPreConsume    int // 按量计费的预消耗额度
 	GroupRatioInfo       GroupRatioInfo
@@ -38,5 +46,5 @@ func (p *PriceData) AddOtherRatio(key string, ratio float64) {
 }
 
 func (p *PriceData) ToSetting() string {
-	return fmt.Sprintf("ModelPrice: %f, ModelRatio: %f, CompletionRatio: %f, CacheRatio: %f, GroupRatio: %f, UsePrice: %t, CacheCreationRatio: %f, CacheCreation5mRatio: %f, CacheCreation1hRatio: %f, QuotaToPreConsume: %d, ImageRatio: %f, AudioRatio: %f, AudioCompletionRatio: %f", p.ModelPrice, p.ModelRatio, p.CompletionRatio, p.CacheRatio, p.GroupRatioInfo.GroupRatio, p.UsePrice, p.CacheCreationRatio, p.CacheCreation5mRatio, p.CacheCreation1hRatio, p.QuotaToPreConsume, p.ImageRatio, p.AudioRatio, p.AudioCompletionRatio)
+	return fmt.Sprintf("ModelPrice: %f, ModelRatio: %f, CompletionRatio: %f, CacheRatio: %f, GroupRatio: %f, UsePrice: %t, UseFixedTokenPrice: %t, FixedTokenPrice: %+v, CacheCreationRatio: %f, CacheCreation5mRatio: %f, CacheCreation1hRatio: %f, QuotaToPreConsume: %d, ImageRatio: %f, AudioRatio: %f, AudioCompletionRatio: %f", p.ModelPrice, p.ModelRatio, p.CompletionRatio, p.CacheRatio, p.GroupRatioInfo.GroupRatio, p.UsePrice, p.UseFixedTokenPrice, p.FixedTokenPrice, p.CacheCreationRatio, p.CacheCreation5mRatio, p.CacheCreation1hRatio, p.QuotaToPreConsume, p.ImageRatio, p.AudioRatio, p.AudioCompletionRatio)
 }

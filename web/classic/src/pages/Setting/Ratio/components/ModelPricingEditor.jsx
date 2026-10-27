@@ -200,6 +200,8 @@ export default function ModelPricingEditor({
               ? t('按次计费')
               : record.billingMode === 'tiered_expr'
                 ? getExprModeLabel(record)
+                  : record.billingMode === 'fixed_token'
+                    ? t('固定 Token 价格')
                 : t('按量计费')}
           </Tag>
         ),
@@ -389,6 +391,8 @@ export default function ModelPricingEditor({
                     ? t('按次计费')
                     : selectedModel.billingMode === 'tiered_expr'
                       ? getExprModeLabel(selectedModel)
+                        : selectedModel.billingMode === 'fixed_token'
+                          ? t('固定 Token 价格')
                       : t('按量计费')}
                 </Tag>
               ) : null
@@ -413,6 +417,7 @@ export default function ModelPricingEditor({
                     onChange={(event) => handleBillingModeChange(event.target.value)}
                   >
                     <Radio value='per-token'>{t('按量计费')}</Radio>
+                    <Radio value='fixed_token'>{t('固定 Token 价格')}</Radio>
                     <Radio value='per-request'>{t('按次计费')}</Radio>
                     <Radio value='tiered_expr'>{t('表达式/阶梯计费')}</Radio>
                   </RadioGroup>
@@ -440,7 +445,33 @@ export default function ModelPricingEditor({
                   </Card>
                 ) : null}
 
-                {selectedModel.billingMode === 'per-request' ? (
+                {selectedModel.billingMode === 'fixed_token' ? (
+                  <Card bodyStyle={{ padding: 16 }} style={{ marginBottom: 16 }}>
+                    <div className='font-medium mb-3'>{t('固定 Token 价格')}</div>
+                    <PriceInput
+                      label={t('输入价格')}
+                      value={selectedModel.fixedInputPrice}
+                      placeholder='$/1M tokens'
+                      suffix='$/1M tokens'
+                      onChange={(value) => handleNumericFieldChange('fixedInputPrice', value)}
+                    />
+                    <PriceInput
+                      label={t('补全价格')}
+                      value={selectedModel.fixedOutputPrice}
+                      placeholder='$/1M tokens'
+                      suffix='$/1M tokens'
+                      onChange={(value) => handleNumericFieldChange('fixedOutputPrice', value)}
+                    />
+                    <PriceInput
+                      label={t('缓存读取价格')}
+                      value={selectedModel.fixedCachePrice}
+                      placeholder='$/1M tokens'
+                      suffix='$/1M tokens'
+                      onChange={(value) => handleNumericFieldChange('fixedCachePrice', value)}
+                    />
+                    <div className='text-xs text-gray-500'>{t('此方式不应用模型倍率，分组倍率仍生效。')}</div>
+                  </Card>
+                ) : selectedModel.billingMode === 'per-request' ? (
                   <PriceInput
                     label={t('固定价格')}
                     value={selectedModel.fixedPrice}

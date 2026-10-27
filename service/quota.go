@@ -32,13 +32,15 @@ type TokenDetails struct {
 }
 
 type QuotaInfo struct {
-	InputDetails  TokenDetails
-	OutputDetails TokenDetails
-	ModelName     string
-	UsePrice      bool
-	ModelPrice    float64
-	ModelRatio    float64
-	GroupRatio    float64
+	InputDetails       TokenDetails
+	OutputDetails      TokenDetails
+	ModelName          string
+	UsePrice           bool
+	ModelPrice         float64
+	ModelRatio         float64
+	GroupRatio         float64
+	UseFixedTokenPrice bool
+	FixedTokenPrice    types.FixedTokenPrice
 }
 
 func hasCustomModelRatio(modelName string, currentRatio float64) bool {
@@ -50,6 +52,11 @@ func hasCustomModelRatio(modelName string, currentRatio float64) bool {
 }
 
 func calculateAudioQuota(info QuotaInfo) int {
+	if info.UseFixedTokenPrice {
+		inputTokens := info.InputDetails.TextTokens + info.InputDetails.AudioTokens
+		outputTokens := info.OutputDetails.TextTokens + info.OutputDetails.AudioTokens
+		return calculateFixedTokenQuota(inputTokens, outputTokens, 0, info.FixedTokenPrice, info.GroupRatio)
+	}
 	if info.UsePrice {
 		modelPrice := decimal.NewFromFloat(info.ModelPrice)
 		quotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
@@ -132,10 +139,12 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 			TextTokens:  textOutTokens,
 			AudioTokens: audioOutTokens,
 		},
-		ModelName:  modelName,
-		UsePrice:   relayInfo.UsePrice,
-		ModelRatio: modelRatio,
-		GroupRatio: actualGroupRatio,
+		ModelName:          modelName,
+		UsePrice:           relayInfo.UsePrice,
+		ModelRatio:         modelRatio,
+		GroupRatio:         actualGroupRatio,
+		UseFixedTokenPrice: relayInfo.PriceData.UseFixedTokenPrice,
+		FixedTokenPrice:    relayInfo.PriceData.FixedTokenPrice,
 	}
 
 	quota := calculateAudioQuota(quotaInfo)
@@ -195,10 +204,12 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 			TextTokens:  textOutTokens,
 			AudioTokens: audioOutTokens,
 		},
-		ModelName:  modelName,
-		UsePrice:   usePrice,
-		ModelRatio: modelRatio,
-		GroupRatio: groupRatio,
+		ModelName:          modelName,
+		UsePrice:           usePrice,
+		ModelRatio:         modelRatio,
+		GroupRatio:         groupRatio,
+		UseFixedTokenPrice: relayInfo.PriceData.UseFixedTokenPrice,
+		FixedTokenPrice:    relayInfo.PriceData.FixedTokenPrice,
 	}
 
 	quota := calculateAudioQuota(quotaInfo)
@@ -316,10 +327,12 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 			TextTokens:  textOutTokens,
 			AudioTokens: audioOutTokens,
 		},
-		ModelName:  relayInfo.OriginModelName,
-		UsePrice:   usePrice,
-		ModelRatio: modelRatio,
-		GroupRatio: groupRatio,
+		ModelName:          relayInfo.OriginModelName,
+		UsePrice:           usePrice,
+		ModelRatio:         modelRatio,
+		GroupRatio:         groupRatio,
+		UseFixedTokenPrice: relayInfo.PriceData.UseFixedTokenPrice,
+		FixedTokenPrice:    relayInfo.PriceData.FixedTokenPrice,
 	}
 
 	quota := calculateAudioQuota(quotaInfo)
