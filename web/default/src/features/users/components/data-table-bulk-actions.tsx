@@ -16,18 +16,57 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useState } from 'react'
 import { type Table } from '@tanstack/react-table'
+import { Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { DataTableBulkActions as BulkActionsToolbar } from '@/components/data-table'
 import { type User } from '../types'
+import { UsersMultiDeleteDialog } from './users-multi-delete-dialog'
 
 interface DataTableBulkActionsProps {
   table: Table<User>
 }
 
 export function DataTableBulkActions({ table }: DataTableBulkActionsProps) {
+  const { t } = useTranslation()
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
   return (
-    <BulkActionsToolbar table={table} entityName='user'>
-      <></>
-    </BulkActionsToolbar>
+    <>
+      <BulkActionsToolbar table={table} entityName='user'>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant='destructive'
+                size='icon'
+                className='size-8'
+                onClick={() => setShowDeleteConfirm(true)}
+                aria-label={t('Delete selected users')}
+              />
+            }
+          >
+            <Trash2 />
+            <span className='sr-only'>{t('Delete selected users')}</span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{t('Delete selected users')}</p>
+          </TooltipContent>
+        </Tooltip>
+      </BulkActionsToolbar>
+
+      <UsersMultiDeleteDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        table={table}
+      />
+    </>
   )
 }

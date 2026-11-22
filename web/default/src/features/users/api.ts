@@ -88,8 +88,45 @@ export async function updateUser(
  * Delete a single user (hard delete)
  */
 export async function deleteUser(id: number): Promise<ApiResponse> {
-  const res = await api.delete(`/api/user/${id}/`)
+  const res = await api.delete(`/api/user/${id}`)
   return res.data
+}
+
+/** Result of a batch deletion; partial failures are expected when the
+ * operator lacks permission over some selected users. */
+export interface BatchDeleteUsersResult {
+  succeeded: number[]
+  failed: { id: number; message?: string }[]
+}
+
+/** Delete multiple users via the single-delete endpoint for each id, so every
+ * deletion goes through the same role check as the single-user flow. */
+export async function batchDeleteUsers(
+  ids: number[]
+): Promise<BatchDeleteUsersResult> {
+  const settled = await Promise.allSettled(
+    ids.map((id) =>
+      api
+        .delete(`/api/user/${id}`, {
+          skipBusinessError: true,
+        } as Record<string, unknown>)
+        .then((res) => res.data as ApiResponse)
+    )
+  )
+
+  const result: BatchDeleteUsersResult = { succeeded: [], failed: [] }
+  settled.forEach((item, index) => {
+    if (item.status === 'fulfilled' && item.value?.success) {
+      result.succeeded.push(ids[index])
+      return
+    }
+    const message =
+      item.status === 'fulfilled'
+        ? item.value?.message
+        : String(item.reason?.message ?? item.reason ?? '')
+    result.failed.push({ id: ids[index], message: message || undefined })
+  })
+  return result
 }
 
 /**
