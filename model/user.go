@@ -330,6 +330,46 @@ func HardDeleteUserById(id int) error {
 	return err
 }
 
+const inactiveUserDays = 30
+
+// inactiveUserQuery is the single source of truth for the inactive-user
+// cleanup filters, shared by the preview count and the hard delete so both
+// scopes stay identical. deleted_at IS NULL is written explicitly because
+// Unscoped() disables GORM's automatic soft-delete filtering on delete.
+func inactiveUserQuery(excludeUserId int) *gorm.DB {
+	cutoff := common.GetTimestamp() - inactiveUserDays*24*3600
+	return DB.Where(
+		"quota <= ? AND role < ? AND id <> ? AND deleted_at IS NULL AND "+
+			"((last_login_at > 0 AND last_login_at < ?) OR (last_login_at = 0 AND created_at < ?))",
+		0, common.RoleAdminUser, excludeUserId, cutoff, cutoff,
+	)
+}
+
+// CountInactiveUsers returns how many users match the cleanup criteria.
+func CountInactiveUsers(excludeUserId int) (int64, error) {
+	var count int64
+	err := inactiveUserQuery(excludeUserId).Model(&User{}).Count(&count).Error
+	return count, err
+}
+
+// DeleteInactiveUsers hard-deletes matching users in batches to avoid a
+// single large transaction (same pattern as DeleteOldLog).
+func DeleteInactiveUsers(excludeUserId int) (int64, error) {
+	const batchSize = 1000
+	var total int64
+	for {
+		result := inactiveUserQuery(excludeUserId).Unscoped().Limit(batchSize).Delete(&User{})
+		if result.Error != nil {
+			return total, result.Error
+		}
+		total += result.RowsAffected
+		if result.RowsAffected < batchSize {
+			break
+		}
+	}
+	return total, nil
+}
+
 func inviteUser(inviterId int) (err error) {
 	user, err := GetUserById(inviterId, true)
 	if err != nil {

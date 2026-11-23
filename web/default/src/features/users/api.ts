@@ -129,6 +129,20 @@ export async function batchDeleteUsers(
   return result
 }
 
+/** Preview how many users match the inactive-user cleanup criteria. */
+export async function previewCleanupInactiveUsers(): Promise<
+  ApiResponse<number>
+> {
+  const res = await api.get('/api/user/cleanup/preview')
+  return res.data
+}
+
+/** Hard-delete inactive users with no balance. Returns the deleted count. */
+export async function cleanupInactiveUsers(): Promise<ApiResponse<number>> {
+  const res = await api.delete('/api/user/cleanup')
+  return res.data
+}
+
 /**
  * Manage user (promote, demote, enable, disable, delete)
  */

@@ -755,6 +755,36 @@ func checkUpdatePassword(originalPassword string, newPassword string, userId int
 	return
 }
 
+// PreviewCleanupInactiveUsers returns the number of users that would be
+// removed by the inactive-user cleanup.
+func PreviewCleanupInactiveUsers(c *gin.Context) {
+	count, err := model.CountInactiveUsers(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    count,
+	})
+}
+
+// CleanupInactiveUsers hard-deletes users inactive for over 30 days with no
+// balance, excluding admins and the operator themselves.
+func CleanupInactiveUsers(c *gin.Context) {
+	rows, err := model.DeleteInactiveUsers(c.GetInt("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    rows,
+	})
+}
+
 func DeleteUser(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
