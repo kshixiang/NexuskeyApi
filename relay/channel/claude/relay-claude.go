@@ -44,6 +44,32 @@ func maybeMarkClaudeRefusal(c *gin.Context, stopReason string) {
 	}
 }
 
+func adaptiveThinkingEffort(model, effort string) string {
+	switch effort {
+	case "minimal":
+		effort = "low"
+	case "low", "medium", "high", "xhigh", "max":
+	default:
+		return ""
+	}
+
+	// Bedrock model IDs can include a region and the anthropic provider prefix.
+	if _, bedrockModel, ok := strings.Cut(model, "anthropic."); ok {
+		model = bedrockModel
+	}
+	// https://platform.claude.com/docs/en/build-with-claude/thinking#configuring-thinking
+	for _, family := range []string{
+		"claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6",
+		"claude-opus-5", "claude-sonnet-5", "claude-haiku-5-5",
+		"claude-fable-5", "claude-mythos-5", "claude-mythos-preview",
+	} {
+		if model == family || strings.HasPrefix(model, family+"-") || strings.HasPrefix(model, family+"@") {
+			return effort
+		}
+	}
+	return ""
+}
+
 func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRequest) (*dto.ClaudeRequest, error) {
 	claudeTools := make([]any, 0, len(textRequest.Tools))
 
@@ -153,6 +179,7 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 		claudeRequest.MaxTokens = &defaultMaxTokens
 	}
 
+	adaptiveEffort := adaptiveThinkingEffort(textRequest.Model, textRequest.ReasoningEffort)
 	if baseModel, effortLevel, ok := reasoning.TrimEffortSuffix(textRequest.Model); ok && effortLevel != "" &&
 		(strings.HasPrefix(textRequest.Model, "claude-opus-4-6") || strings.HasPrefix(textRequest.Model, "claude-opus-4-7")) {
 		claudeRequest.Model = baseModel
@@ -182,7 +209,7 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 			claudeRequest.Temperature = nil
 			claudeRequest.TopP = nil
 			claudeRequest.TopK = nil
-		} else {
+		} else if adaptiveEffort == "" {
 			// 因为BudgetTokens 必须大于1024
 			if claudeRequest.MaxTokens == nil || *claudeRequest.MaxTokens < 1280 {
 				claudeRequest.MaxTokens = common.GetPointer[uint](1280)
@@ -203,7 +230,16 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 		}
 	}
 
-	if textRequest.ReasoningEffort != "" {
+	if adaptiveEffort != "" {
+		if claudeRequest.Thinking == nil || claudeRequest.Thinking.Type != "adaptive" {
+			claudeRequest.Thinking = &dto.Thinking{Type: "adaptive"}
+		}
+		outputConfig, err := common.Marshal(dto.OutputConfigForEffort{Effort: adaptiveEffort})
+		if err != nil {
+			return nil, fmt.Errorf("marshal Claude output_config: %w", err)
+		}
+		claudeRequest.OutputConfig = outputConfig
+	} else {
 		switch textRequest.ReasoningEffort {
 		case "low":
 			claudeRequest.Thinking = &dto.Thinking{
@@ -231,7 +267,7 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 		}
 
 		budgetTokens := reasoning.MaxTokens
-		if budgetTokens > 0 {
+		if budgetTokens > 0 && (claudeRequest.Thinking == nil || claudeRequest.Thinking.Type != "adaptive") {
 			claudeRequest.Thinking = &dto.Thinking{
 				Type:         "enabled",
 				BudgetTokens: &budgetTokens,

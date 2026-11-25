@@ -275,6 +275,58 @@ func TestBuildOpenAIStyleUsageFromClaudeUsageDefaultsAggregateCacheCreationTo5m(
 	require.Equal(t, 0, openAIUsage.ClaudeCacheCreation1hTokens)
 }
 
+func TestRequestOpenAI2ClaudeMessage_AdaptiveReasoningEffort(t *testing.T) {
+	tests := []struct {
+		model        string
+		effort       string
+		wantModel    string
+		wantEffort   string
+		legacyBudget bool
+	}{
+		{model: "claude-opus-4-6", effort: "low", wantModel: "claude-opus-4-6", wantEffort: "low"},
+		{model: "claude-sonnet-4-6", effort: "minimal", wantModel: "claude-sonnet-4-6", wantEffort: "low"},
+		{model: "claude-opus-4-7", effort: "xhigh", wantModel: "claude-opus-4-7", wantEffort: "xhigh"},
+		{model: "claude-opus-4-7-high", effort: "medium", wantModel: "claude-opus-4-7", wantEffort: "medium", legacyBudget: true},
+		{model: "claude-opus-4-8", effort: "high", wantModel: "claude-opus-4-8", wantEffort: "high"},
+		{model: "claude-fable-5-2", effort: "max", wantModel: "claude-fable-5-2", wantEffort: "max"},
+		{model: "us.anthropic.claude-opus-4-6-v1", effort: "medium", wantModel: "us.anthropic.claude-opus-4-6-v1", wantEffort: "medium"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			request := dto.GeneralOpenAIRequest{
+				Model:           tt.model,
+				ReasoningEffort: tt.effort,
+				Messages:        []dto.Message{{Role: "user", Content: "Hello"}},
+			}
+			if tt.legacyBudget {
+				request.Reasoning = []byte(`{"max_tokens":2048}`)
+			}
+
+			converted, err := RequestOpenAI2ClaudeMessage(nil, request)
+			require.NoError(t, err)
+			require.Equal(t, tt.wantModel, converted.Model)
+			require.NotNil(t, converted.Thinking)
+			require.Equal(t, "adaptive", converted.Thinking.Type)
+			require.Nil(t, converted.Thinking.BudgetTokens)
+			require.Equal(t, tt.wantEffort, converted.GetEfforts())
+		})
+	}
+}
+
+func TestRequestOpenAI2ClaudeMessage_LegacyReasoningEffort(t *testing.T) {
+	converted, err := RequestOpenAI2ClaudeMessage(nil, dto.GeneralOpenAIRequest{
+		Model:           "claude-sonnet-4-5-20250929",
+		ReasoningEffort: "medium",
+		Messages:        []dto.Message{{Role: "user", Content: "Hello"}},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, converted.Thinking)
+	require.Equal(t, "enabled", converted.Thinking.Type)
+	require.NotNil(t, converted.Thinking.BudgetTokens)
+	require.Equal(t, 2048, *converted.Thinking.BudgetTokens)
+	require.Empty(t, converted.OutputConfig)
+}
+
 func TestRequestOpenAI2ClaudeMessage_IgnoresUnsupportedFileContent(t *testing.T) {
 	request := dto.GeneralOpenAIRequest{
 		Model: "claude-3-5-sonnet",
