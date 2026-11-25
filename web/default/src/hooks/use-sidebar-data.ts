@@ -100,6 +100,11 @@ export function useSidebarData(): SidebarData {
             configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
             icon: ListTodo,
           },
+          {
+            title: t('Channel Status'),
+            url: '/channel-status',
+            icon: HeartPulse,
+          },
         ],
       },
       {
@@ -126,11 +131,6 @@ export function useSidebarData(): SidebarData {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
-          },
-          {
-            title: t('Channel Status'),
-            url: '/channel-status',
-            icon: HeartPulse,
           },
           {
             title: t('Models'),

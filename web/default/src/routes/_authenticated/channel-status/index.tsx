@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import z from 'zod'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useAuthStore } from '@/stores/auth-store'
-import { ROLE } from '@/lib/roles'
 import { ChannelStatusPage } from '@/features/channel-status'
 
 const channelStatusSearchSchema = z.object({
@@ -48,7 +47,7 @@ export const Route = createFileRoute('/_authenticated/channel-status/')({
   beforeLoad: () => {
     const { auth } = useAuthStore.getState()
 
-    if (!auth.user || auth.user.role < ROLE.ADMIN) {
+    if (!auth.user) {
       throw redirect({
         to: '/403',
       })

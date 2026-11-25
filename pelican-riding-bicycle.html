@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>鹈鹕骑自行车 · SVG 动画</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 20px;
+      background: #1d2b36;
+      color: #e8eef2;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 1px; }
+    .stage {
+      width: 100%;
+      max-width: 960px;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
+    }
+    svg { display: block; width: 100%; height: auto; }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 22px;
+      background: #2bb3a3;
+      color: #fff;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { background: #239a8c; }
+    label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    input[type="range"] { accent-color: #2bb3a3; }
+    .sun-rays { transform-box: fill-box; transform-origin: center; animation: spin 30s linear infinite; }
+    .paused .sun-rays { animation-play-state: paused; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <h1>🚲 鹈鹕骑自行车</h1>
+
+  <div class="stage" id="stage">
+    <svg id="scene" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" aria-label="一只戴头盔的鹈鹕骑着自行车">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#7cc8f2"/>
+          <stop offset="0.65" stop-color="#bfe6f5"/>
+          <stop offset="1" stop-color="#fbe7c6"/>
+        </linearGradient>
+        <radialGradient id="sunGlow">
+          <stop offset="0" stop-color="#fff6c8" stop-opacity="0.9"/>
+          <stop offset="1" stop-color="#fff6c8" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#555c66"/>
+          <stop offset="1" stop-color="#3a3f47"/>
+        </linearGradient>
+        <linearGradient id="frameGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#f06a4f"/>
+          <stop offset="1" stop-color="#d2443a"/>
+        </linearGradient>
+      </defs>
+
+      <rect width="800" height="500" fill="url(#sky)"/>
+
+      <g transform="translate(660 90)">
+        <circle r="90" fill="url(#sunGlow)"/>
+        <g class="sun-rays" stroke="#ffd36b" stroke-width="4" stroke-linecap="round" opacity="0.8">
+          <line x1="0" y1="-52" x2="0" y2="-66"/>
+          <line x1="0" y1="52" x2="0" y2="66"/>
+          <line x1="-52" y1="0" x2="-66" y2="0"/>
+          <line x1="52" y1="0" x2="66" y2="0"/>
+          <line x1="37" y1="37" x2="47" y2="47"/>
+          <line x1="-37" y1="37" x2="-47" y2="47"/>
+          <line x1="37" y1="-37" x2="47" y2="-47"/>
+          <line x1="-37" y1="-37" x2="-47" y2="-47"/>
+        </g>
+        <circle r="40" fill="#ffd36b"/>
+        <circle r="40" fill="none" stroke="#f7b84b" stroke-width="3"/>
+      </g>
+
+      <g id="clouds"></g>
+      <g id="birds" fill="none" stroke="#3d4e5c" stroke-width="2" stroke-linecap="round"></g>
+      <g id="farHills"></g>
+      <g id="nearHills"></g>
+
+      <rect x="0" y="400" width="800" height="24" fill="#6fbf73"/>
+      <rect x="0" y="420" width="800" height="80" fill="url(#road)"/>
+      <rect x="0" y="420" width="800" height="4" fill="#8a9099"/>
+      <g id="roadDashes" fill="#f3ead2"></g>
+      <g id="speedLines" stroke="#ffffff" stroke-width="3" stroke-linecap="round"></g>
+
+      <ellipse cx="402" cy="424" rx="140" ry="6" fill="#000" opacity="0.22"/>
+
+      <g id="rider">
+        <g id="rearWheel" transform="translate(300 360)"></g>
+        <g id="frontWheel" transform="translate(505 360)"></g>
+
+        <g id="farLeg"></g>
+        <g id="farCrank"></g>
+
+        <g id="frame" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M300 360 L392 365 M300 360 L378 285 M392 365 L374 272 M378 285 L478 276 M392 365 L484 300"
+                stroke="#2f3b45" stroke-width="10"/>
+          <path d="M300 360 L392 365 M300 360 L378 285 M392 365 L374 272 M378 285 L478 276 M392 365 L484 300"
+                stroke="url(#frameGrad)" stroke-width="6"/>
+          <path d="M478 274 L485 302" stroke="#2f3b45" stroke-width="12"/>
+          <path d="M478 274 L485 302" stroke="#f06a4f" stroke-width="8"/>
+          <path d="M485 300 Q493 338 505 360" stroke="#2f3b45" stroke-width="7"/>
+          <path d="M485 300 Q493 338 505 360" stroke="#c9d1d6" stroke-width="3.5"/>
+          <path d="M478 275 L473 258 M465 260 Q470 247 482 246 L494 248" stroke="#2f3b45" stroke-width="5"/>
+          <path d="M486 247 L496 249" stroke="#1b2228" stroke-width="8"/>
+          <path d="M350 268 Q372 260 394 267 Q392 275 372 275 Q355 275 350 268 Z" fill="#2f3b45" stroke="#1b2228" stroke-width="2"/>
+          <path d="M392 351 L300 353 M392 379 L300 367" stroke="#555f68" stroke-width="2.5" stroke-dasharray="3 2"/>
+        </g>
+
+        <g id="chainring" transform="translate(392 365)"></g>
+
+        <g id="upper">
+          <path d="M316 238 L284 226 L293 242 L282 256 L318 254 Z" fill="#f4f5f1" stroke="#2f3b45" stroke-width="2.5" stroke-linejoin="round"/>
+          <ellipse cx="358" cy="234" rx="50" ry="33" transform="rotate(-14 358 234)" fill="#fbfbf7" stroke="#2f3b45" stroke-width="2.5"/>
+          <ellipse cx="356" cy="250" rx="34" ry="13" transform="rotate(-14 356 250)" fill="#e8ebe6"/>
+
+          <path id="scarfTail" fill="#e4573d" stroke="#a8321f" stroke-width="1.5" stroke-linejoin="round"/>
+
+          <path d="M380 224 C408 198 392 172 414 150" fill="none" stroke="#2f3b45" stroke-width="23" stroke-linecap="round"/>
+          <path d="M380 224 C408 198 392 172 414 150" fill="none" stroke="#fbfbf7" stroke-width="18" stroke-linecap="round"/>
+          <path d="M395 196 C400 186 398 176 404 166" fill="none" stroke="#e3e6e0" stroke-width="3" stroke-linecap="round"/>
+
+          <ellipse cx="389" cy="214" rx="13" ry="7" transform="rotate(-38 389 214)" fill="#e4573d" stroke="#a8321f" stroke-width="1.5"/>
+          <circle cx="382" cy="220" r="4.5" fill="#d04a32" stroke="#a8321f" stroke-width="1.2"/>
+
+          <g id="head">
+            <g id="pouch">
+              <path d="M436 148 Q482 154 526 160 Q502 194 462 186 Q440 178 436 148 Z" fill="#f39a5c" stroke="#2f3b45" stroke-width="2.2" stroke-linejoin="round"/>
+              <path d="M450 168 Q480 176 506 172" fill="none" stroke="#e07c42" stroke-width="2" stroke-linecap="round"/>
+            </g>
+            <ellipse cx="422" cy="142" rx="19" ry="16" fill="#fbfbf7" stroke="#2f3b45" stroke-width="2.5"/>
+            <path d="M432 135 Q482 139 528 151 Q538 155 531 161 Q482 153 434 149 Z" fill="#f6c24a" stroke="#2f3b45" stroke-width="2.2" stroke-linejoin="round"/>
+            <path d="M528 151 Q540 156 530 165" fill="none" stroke="#2f3b45" stroke-width="2.2" stroke-linecap="round"/>
+            <path d="M440 142 Q485 147 522 154" fill="none" stroke="#d99a2b" stroke-width="1.5"/>
+            <g id="eye">
+              <circle cx="428" cy="141" r="3.6" fill="#1b2228"/>
+              <circle cx="429.3" cy="139.8" r="1.2" fill="#fff"/>
+            </g>
+            <path d="M403 140 Q402 119 423 117 Q443 118 443 136 Q423 131 403 140 Z" fill="#2bb3a3" stroke="#2f3b45" stroke-width="2.2" stroke-linejoin="round"/>
+            <path d="M414 123 L416 131 M424 120 L425 129 M434 122 L433 130" stroke="#1d7f73" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M407 139 Q412 158 430 156" fill="none" stroke="#2f3b45" stroke-width="1.6"/>
+          </g>
+
+          <path d="M364 214 C400 203 442 222 488 245 C472 250 446 247 418 241 C392 237 370 233 364 214 Z" fill="#eef1f3" stroke="#2f3b45" stroke-width="2.3" stroke-linejoin="round"/>
+          <path d="M384 222 Q400 226 412 234 M400 219 Q420 226 434 236 M418 222 Q438 230 452 240" fill="none" stroke="#c7cfd5" stroke-width="2" stroke-linecap="round"/>
+          <path d="M462 241 L490 245 M458 245 L484 249" fill="none" stroke="#3d4e5c" stroke-width="3" stroke-linecap="round"/>
+        </g>
+
+        <g id="nearCrank"></g>
+        <g id="nearLeg"></g>
+      </g>
+    </svg>
+  </div>
+
+  <div class="controls">
+    <button id="toggle" type="button">暂停</button>
+    <label>速度
+      <input id="speed" type="range" min="0.2" max="2.5" step="0.1" value="1">
+      <span id="speedVal">1.0x</span>
+    </label>
+  </div>
+
+  <script>
+    (() => {
+      const NS = "http://www.w3.org/2000/svg";
+      const $ = (id) => document.getElementById(id);
+      const el = (tag, attrs, parent) => {
+        const node = document.createElementNS(NS, tag);
+        for (const k in attrs) node.setAttribute(k, attrs[k]);
+        if (parent) parent.appendChild(node);
+        return node;
+      };
+
+      const WHEEL_R = 57;
+      const BB = { x: 392, y: 365 };
+      const CRANK = 22;
+      const THIGH = 67;
+      const SHIN = 67;
+      const GROUND_SPEED = 170;
+
+      function buildWheel(group) {
+        el("circle", { r: WHEEL_R, fill: "none", stroke: "#263038", "stroke-width": 8 }, group);
+        const spin = el("g", {}, group);
+        el("circle", { r: WHEEL_R - 6, fill: "none", stroke: "#a3adb5", "stroke-width": 3 }, spin);
+        for (let i = 0; i < 16; i++) {
+          const a = (i / 16) * Math.PI * 2;
+          el("line", {
+            x1: 0, y1: 0,
+            x2: Math.cos(a) * (WHEEL_R - 7),
+            y2: Math.sin(a) * (WHEEL_R - 7),
+            stroke: "#c3cbd1", "stroke-width": 1.2
+          }, spin);
+        }
+        el("rect", { x: -2, y: -WHEEL_R - 3, width: 4, height: 7, fill: "#e4573d" }, spin);
+        el("circle", { r: 6, fill: "#5a656e", stroke: "#2f3b45", "stroke-width": 2 }, spin);
+        return spin;
+      }
+      const rearSpin = buildWheel($("rearWheel"));
+      const frontSpin = buildWheel($("frontWheel"));
+
+      const ring = $("chainring");
+      el("circle", { r: 15, fill: "#b8c1c7", stroke: "#2f3b45", "stroke-width": 2 }, ring);
+      const ringSpin = el("g", {}, ring);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        el("line", { x1: 0, y1: 0, x2: Math.cos(a) * 11, y2: Math.sin(a) * 11, stroke: "#6c7780", "stroke-width": 2.5 }, ringSpin);
+      }
+      el("circle", { r: 4, fill: "#2f3b45" }, ring);
+
+      function buildCrank(group, armColor) {
+        const arm = el("line", { stroke: armColor, "stroke-width": 5, "stroke-linecap": "round" }, group);
+        const pedal = el("rect", { width: 16, height: 5, rx: 1.5, fill: "#1b2228" }, group);
+        return { arm, pedal };
+      }
+      const nearCrank = buildCrank($("nearCrank"), "#3d4a54");
+      const farCrank = buildCrank($("farCrank"), "#5d6a74");
+
+      function buildLeg(group, shade) {
+        const thighOut = el("path", { fill: "none", stroke: "#2f3b45", "stroke-width": 19, "stroke-linecap": "round" }, group);
+        const thigh = el("path", { fill: "none", stroke: shade ? "#dfe3e1" : "#fbfbf7", "stroke-width": 14.5, "stroke-linecap": "round" }, group);
+        const shinOut = el("path", { fill: "none", stroke: "#2f3b45", "stroke-width": 9, "stroke-linecap": "round" }, group);
+        const shin = el("path", { fill: "none", stroke: shade ? "#d4782f" : "#f39a3c", "stroke-width": 5, "stroke-linecap": "round" }, group);
+        const foot = el("path", {
+          d: "M-7 -3 L9 -8 L15 -3 L12 3 L-6 3 Z",
+          fill: shade ? "#d4782f" : "#f39a3c",
+          stroke: "#2f3b45", "stroke-width": 1.8, "stroke-linejoin": "round"
+        }, group);
+        return { thighOut, thigh, shinOut, shin, foot };
+      }
+      const nearLeg = buildLeg($("nearLeg"), false);
+      const farLeg = buildLeg($("farLeg"), true);
+
+      function solveKnee(hip, foot) {
+        const dx = foot.x - hip.x;
+        const dy = foot.y - hip.y;
+        let d = Math.hypot(dx, dy);
+        d = Math.min(d, THIGH + SHIN - 0.5);
+        const a = (THIGH * THIGH - SHIN * SHIN + d * d) / (2 * d);
+        const h = Math.sqrt(Math.max(0, THIGH * THIGH - a * a));
+        const ux = dx / d, uy = dy / d;
+        const px = hip.x + ux * a, py = hip.y + uy * a;
+        const k1 = { x: px - uy * h, y: py + ux * h };
+        const k2 = { x: px + uy * h, y: py - ux * h };
+        return k1.x > k2.x ? k1 : k2;
+      }
+
+      function updateLeg(leg, hip, foot) {
+        const knee = solveKnee(hip, foot);
+        const thighD = `M${hip.x} ${hip.y} L${knee.x.toFixed(2)} ${knee.y.toFixed(2)}`;
+        const shinD = `M${knee.x.toFixed(2)} ${knee.y.toFixed(2)} L${foot.x.toFixed(2)} ${(foot.y - 3).toFixed(2)}`;
+        leg.thighOut.setAttribute("d", thighD);
+        leg.thigh.setAttribute("d", thighD);
+        leg.shinOut.setAttribute("d", shinD);
+        leg.shin.setAttribute("d", shinD);
+        leg.foot.setAttribute("transform", `translate(${foot.x.toFixed(2)} ${(foot.y - 3).toFixed(2)})`);
+      }
+
+      function updateCrank(crank, pedal) {
+        crank.arm.setAttribute("x1", BB.x);
+        crank.arm.setAttribute("y1", BB.y);
+        crank.arm.setAttribute("x2", pedal.x.toFixed(2));
+        crank.arm.setAttribute("y2", pedal.y.toFixed(2));
+        crank.pedal.setAttribute("x", (pedal.x - 8).toFixed(2));
+        crank.pedal.setAttribute("y", (pedal.y - 2.5).toFixed(2));
+      }
+
+      const TILE = 800;
+      function hillY(x, base, waves) {
+        let y = base;
+        for (const [amp, k, phase] of waves) y += amp * Math.sin((2 * Math.PI * k * x) / TILE + phase);
+        return y;
+      }
+      function buildHills(group, base, waves, fill, stroke) {
+        let d = "M0 430";
+        for (let x = 0; x <= TILE * 2; x += 10) d += ` L${x} ${hillY(x, base, waves).toFixed(1)}`;
+        d += ` L${TILE * 2} 430 Z`;
+        el("path", { d, fill, stroke, "stroke-width": 2 }, group);
+      }
+
+      const farWaves = [[20, 1, 0.4], [9, 3, 1.3], [4, 7, 0.2]];
+      const nearWaves = [[18, 2, 0.9], [7, 5, 2.1]];
+      const farLayer = el("g", {}, $("farHills"));
+      buildHills(farLayer, 300, farWaves, "#a9d8c6", "#93c7b3");
+      const nearLayer = el("g", {}, $("nearHills"));
+      buildHills(nearLayer, 352, nearWaves, "#7cc68a", "#66b276");
+      for (const tx of [70, 230, 390, 560, 700]) {
+        for (const offset of [0, TILE]) {
+          const x = tx + offset;
+          const y = hillY(x, 352, nearWaves);
+          const tree = el("g", { transform: `translate(${x} ${y + 4})` }, nearLayer);
+          el("rect", { x: -3, y: -22, width: 6, height: 24, fill: "#7a5a3f" }, tree);
+          el("circle", { cx: 0, cy: -32, r: 15, fill: "#4fa565", stroke: "#3e8b52", "stroke-width": 2 }, tree);
+          el("circle", { cx: -8, cy: -24, r: 10, fill: "#57ae6c" }, tree);
+          el("circle", { cx: 8, cy: -26, r: 10, fill: "#5cb371" }, tree);
+        }
+      }
+
+      const cloudLayer = el("g", {}, $("clouds"));
+      function cloud(x, y, s) {
+        const g = el("g", { transform: `translate(${x} ${y}) scale(${s})`, fill: "#ffffff", opacity: 0.92 }, cloudLayer);
+        el("ellipse", { cx: 0, cy: 0, rx: 46, ry: 16 }, g);
+        el("circle", { cx: -18, cy: -10, r: 18 }, g);
+        el("circle", { cx: 10, cy: -18, r: 24 }, g);
+        el("circle", { cx: 32, cy: -6, r: 15 }, g);
+      }
+      for (const offset of [0, TILE]) {
+        cloud(120 + offset, 80, 1);
+        cloud(400 + offset, 55, 0.7);
+        cloud(560 + offset, 150, 0.85);
+        cloud(760 + offset, 110, 0.6);
+      }
+
+      const dashLayer = el("g", {}, $("roadDashes"));
+      for (let x = 0; x <= TILE + 80; x += 80) {
+        el("rect", { x, y: 458, width: 42, height: 6, rx: 3 }, dashLayer);
+      }
+
+      const speedLines = [];
+      for (let i = 0; i < 5; i++) {
+        speedLines.push(el("line", { y1: 0, y2: 0 }, $("speedLines")));
+      }
+      const speedLineY = [200, 236, 272, 318, 380];
+
+      const birds = [];
+      for (let i = 0; i < 3; i++) birds.push(el("path", {}, $("birds")));
+
+      const scarfTail = $("scarfTail");
+      function updateScarf(time, speed) {
+        const N = 14;
+        const top = [], bottom = [];
+        const flutter = 6 + speed * 4;
+        for (let i = 0; i <= N; i++) {
+          const s = i / N;
+          const x = 384 - s * (62 + speed * 10);
+          const y = 220 - s * 2 + Math.sin(time * (8 + speed * 6) - s * 6) * s * flutter;
+          const w = 8 * (1 - s * 0.45);
+          top.push(`${x.toFixed(1)} ${(y - w / 2).toFixed(1)}`);
+          bottom.push(`${x.toFixed(1)} ${(y + w / 2).toFixed(1)}`);
+        }
+        scarfTail.setAttribute("d", `M${top.join(" L")} L${bottom.reverse().join(" L")} Z`);
+      }
+
+      const upper = $("upper");
+      const head = $("head");
+      const pouch = $("pouch");
+      const eye = $("eye");
+      const NEAR_HIP = { x: 372, y: 258 };
+      const FAR_HIP = { x: 366, y: 255 };
+
+      let distance = 0;
+      let time = 0;
+      let speed = 1;
+      let running = true;
+      let last = null;
+
+      function render() {
+        const wheelDeg = (distance / WHEEL_R) * (180 / Math.PI);
+        rearSpin.setAttribute("transform", `rotate(${wheelDeg.toFixed(2)})`);
+        frontSpin.setAttribute("transform", `rotate(${wheelDeg.toFixed(2)})`);
+
+        const crank = (distance / WHEEL_R) * 0.5;
+        ringSpin.setAttribute("transform", `rotate(${((crank * 180) / Math.PI).toFixed(2)})`);
+        const nearPedal = { x: BB.x + Math.cos(crank) * CRANK, y: BB.y + Math.sin(crank) * CRANK };
+        const farPedal = { x: BB.x - Math.cos(crank) * CRANK, y: BB.y - Math.sin(crank) * CRANK };
+        updateCrank(nearCrank, nearPedal);
+        updateCrank(farCrank, farPedal);
+        updateLeg(nearLeg, NEAR_HIP, nearPedal);
+        updateLeg(farLeg, FAR_HIP, farPedal);
+
+        const bob = Math.sin(crank * 2) * 1.6;
+        upper.setAttribute("transform", `translate(0 ${bob.toFixed(2)})`);
+        const nod = Math.sin(crank * 2 + 0.6) * 2.5;
+        head.setAttribute("transform", `rotate(${nod.toFixed(2)} 414 150)`);
+        const wobble = 1 + Math.sin(crank * 2 + 1.2) * 0.08;
+        pouch.setAttribute("transform", `translate(0 150) scale(1 ${wobble.toFixed(3)}) translate(0 -150)`);
+
+        const blinking = time % 3.6 < 0.13;
+        eye.setAttribute("transform", blinking ? "translate(0 141) scale(1 0.15) translate(0 -141)" : "");
+
+        updateScarf(time, speed);
+
+        dashLayer.setAttribute("transform", `translate(${-(distance % 80)} 0)`);
+        nearLayer.setAttribute("transform", `translate(${-((distance * 0.35) % TILE)} 0)`);
+        farLayer.setAttribute("transform", `translate(${-((distance * 0.12) % TILE)} 0)`);
+        cloudLayer.setAttribute("transform", `translate(${-((distance * 0.04 + time * 6) % TILE)} 0)`);
+
+        speedLines.forEach((line, i) => {
+          const span = 160;
+          const p = ((distance * 1.4 + i * 53) % span) / span;
+          const x = 285 - p * 150;
+          const len = 26 + (i % 3) * 10;
+          line.setAttribute("x1", x.toFixed(1));
+          line.setAttribute("x2", (x - len).toFixed(1));
+          line.setAttribute("y1", speedLineY[i]);
+          line.setAttribute("y2", speedLineY[i]);
+          line.setAttribute("opacity", (Math.sin(p * Math.PI) * 0.75 * Math.min(1, speed)).toFixed(2));
+        });
+
+        birds.forEach((bird, i) => {
+          const bx = ((time * (14 + i * 4) + i * 260) % 900) - 50;
+          const by = 120 + i * 26 + Math.sin(time * 0.8 + i) * 8;
+          const s = 1 - i * 0.18;
+          const flap = Math.sin(time * (7 + i)) * 5 * s;
+          bird.setAttribute("d",
+            `M${bx - 9 * s} ${by} Q${bx - 4 * s} ${by - 4 * s - flap} ${bx} ${by} Q${bx + 4 * s} ${by - 4 * s - flap} ${bx + 9 * s} ${by}`);
+        });
+      }
+
+      function frame(now) {
+        if (last === null) last = now;
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (running) {
+          time += dt;
+          distance += GROUND_SPEED * speed * dt;
+          render();
+        }
+        requestAnimationFrame(frame);
+      }
+
+      $("toggle").addEventListener("click", () => {
+        running = !running;
+        $("toggle").textContent = running ? "暂停" : "继续";
+        $("stage").classList.toggle("paused", !running);
+      });
+      $("speed").addEventListener("input", (e) => {
+        speed = parseFloat(e.target.value);
+        $("speedVal").textContent = speed.toFixed(1) + "x";
+      });
+
+      render();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
