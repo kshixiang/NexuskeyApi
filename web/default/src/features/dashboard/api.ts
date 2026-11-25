@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
-import type { QuotaDataItem, UptimeGroupResult } from './types'
+import type { QuotaDataItem, UptimeGroupResult, UserModelUsage } from './types'
 
 // ============================================================================
 // Dashboard APIs
@@ -59,6 +59,19 @@ export async function getUserQuotaDataByUsers(params: {
     { params }
   )
   return res.data
+}
+
+export async function getUserModelUsage(params: {
+  user_id: number
+  start_timestamp: number
+  end_timestamp: number
+}): Promise<UserModelUsage[]> {
+  const res = await api.get<{
+    success: boolean
+    data: UserModelUsage[]
+  }>('/api/data/users/models', { params })
+  if (!res.data.success) throw new Error('Request failed')
+  return res.data.data
 }
 
 // Get uptime monitoring status for all services

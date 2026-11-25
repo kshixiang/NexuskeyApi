@@ -33,6 +33,14 @@ export interface QuotaDataItem {
   quota?: number
 }
 
+export type UserModelUsage = {
+  model_name: string
+  input_tokens?: number | null
+  output_tokens?: number | null
+  token_used: number
+  quota: number
+}
+
 // ============================================================================
 // Uptime Monitoring Types
 // ============================================================================

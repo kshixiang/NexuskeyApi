@@ -38,6 +38,7 @@ import {
   processUserChartData,
 } from '@/features/dashboard/lib'
 import type { ProcessedUserChartData } from '@/features/dashboard/types'
+import { UserModelUsage } from './user-model-usage'
 
 let themeManagerPromise: Promise<
   (typeof import('@visactor/vchart'))['ThemeManager']
@@ -124,12 +125,16 @@ export function UserCharts() {
     updateTheme()
   }, [resolvedTheme])
 
-  const { data: userData, isLoading } = useQuery({
+  const {
+    data: userQuota,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['dashboard', 'user-quota', timeRange],
     queryFn: () => getUserQuotaDataByUsers(timeRange),
-    select: (res) => (res.success ? res.data : []),
     staleTime: 60_000,
   })
+  const userData = userQuota?.success ? userQuota.data : undefined
 
   const chartData = useMemo(
     () =>
@@ -214,6 +219,13 @@ export function UserCharts() {
           <Loader2 className='text-muted-foreground size-4 animate-spin' />
         )}
       </div>
+
+      <UserModelUsage
+        userData={userData}
+        isLoadingUsers={isLoading}
+        usersLoadFailed={isError || userQuota?.success === false}
+        timeRange={timeRange}
+      />
 
       <div className='grid gap-3'>
         {USER_CHARTS.map((chart) => {
