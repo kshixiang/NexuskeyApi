@@ -4542,6 +4542,20 @@
     "Now": "现在",
     "{{count}} tests": "{{count}} 次测试",
     "Edit group": "Edit group",
-    "Edit group settings": "Edit group settings"
+    "Edit group settings": "Edit group settings",
+    "Cost Details": "Cost Details",
+    "Input Cost": "Input Cost",
+    "Output Cost": "Output Cost",
+    "Input Unit Price": "Input Unit Price",
+    "Output Unit Price": "Output Unit Price",
+    "Cache Read Cost": "Cache Read Cost",
+    "Cache Read Tokens": "Cache Read Tokens",
+    "Service Tier": "Service Tier",
+    "Original Cost": "Original Cost",
+    "User Charge": "User Charge",
+    "Total Token Count": "Total Token Count",
+    "First Token Latency": "First Token Latency",
+    "Total Duration": "Total Duration",
+    "Output Speed": "Output Speed"
   }
 }

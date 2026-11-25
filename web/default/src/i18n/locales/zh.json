@@ -4542,6 +4542,20 @@
     "Now": "现在",
     "{{count}} tests": "{{count}} 次测试",
     "Edit group": "编辑分组",
-    "Edit group settings": "编辑分组设置"
+    "Edit group settings": "编辑分组设置",
+    "Cost Details": "费用明细",
+    "Input Cost": "输入费用",
+    "Output Cost": "输出费用",
+    "Input Unit Price": "输入单价",
+    "Output Unit Price": "输出单价",
+    "Cache Read Cost": "缓存读取费用",
+    "Cache Read Tokens": "缓存读取 Token",
+    "Service Tier": "服务档位",
+    "Original Cost": "原始",
+    "User Charge": "用户扣费",
+    "Total Token Count": "总 Token",
+    "First Token Latency": "首字",
+    "Total Duration": "总耗时",
+    "Output Speed": "输出速率"
   }
 }

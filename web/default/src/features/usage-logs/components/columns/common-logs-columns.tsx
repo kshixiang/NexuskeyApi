@@ -16,14 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { type ColumnDef } from '@tanstack/react-table'
-import { CircleAlert, Sparkles, KeyRound } from 'lucide-react'
+import {
+  CircleAlert,
+  Clipboard,
+  Info,
+  Sparkles,
+  KeyRound,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import {
-  formatUseTime,
+  formatBillingCurrencyFromUSD,
+  getCurrencyDisplay,
+} from '@/lib/currency'
+import {
+  formatTokens,
   formatLogQuota,
   formatTimestampToDate,
 } from '@/lib/format'
@@ -40,8 +49,6 @@ import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import type { UsageLog } from '../../data/schema'
 import {
   formatModelName,
-  getFirstResponseTimeColor,
-  getResponseTimeColor,
   getTieredBillingSummary,
   hasAnyCacheTokens,
   parseLogOther,
@@ -87,6 +94,214 @@ function getGroupRatioText(other: LogOtherData | null): string | null {
   }
 
   return null
+}
+
+interface TooltipRow {
+  label: string
+  value: string
+  divider?: boolean
+  tone?: 'highlight' | 'accent' | 'muted'
+}
+
+const AMOUNT_FORMAT_OPTS = {
+  digitsLarge: 4,
+  digitsSmall: 8,
+  abbreviate: false,
+}
+const UNIT_PRICE_FORMAT_OPTS = {
+  digitsLarge: 4,
+  digitsSmall: 6,
+  abbreviate: false,
+}
+
+function toNonNegative(value: number | undefined | null): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value
+    : 0
+}
+
+function getUsageTokens(log: UsageLog, other: LogOtherData | null) {
+  const input = toNonNegative(log.prompt_tokens)
+  const output = toNonNegative(log.completion_tokens)
+  const cacheRead = toNonNegative(other?.cache_tokens)
+  const cacheWrite5m = toNonNegative(other?.cache_creation_tokens_5m)
+  const cacheWrite1h = toNonNegative(other?.cache_creation_tokens_1h)
+  const hasSplitCache = cacheWrite5m > 0 || cacheWrite1h > 0
+  const cacheWrite = hasSplitCache
+    ? cacheWrite5m + cacheWrite1h
+    : toNonNegative(other?.cache_creation_tokens)
+
+  return {
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+    total: input + output + cacheRead + cacheWrite,
+  }
+}
+
+function getEffectiveRatio(other: LogOtherData | null): number | null {
+  const userRatio = other?.user_group_ratio
+  if (
+    typeof userRatio === 'number' &&
+    Number.isFinite(userRatio) &&
+    userRatio >= 0
+  ) {
+    return userRatio
+  }
+  const ratio = other?.group_ratio
+  if (typeof ratio === 'number' && Number.isFinite(ratio)) return ratio
+  return null
+}
+
+function getServiceTierLabel(
+  other: LogOtherData | null,
+  t: (key: string) => string
+): string {
+  if (other?.billing_mode === 'tiered_expr') {
+    const summary = getTieredBillingSummary(other)
+    if (summary?.tier.label) return summary.tier.label
+    if (other.matched_tier) return other.matched_tier
+  }
+  return t('Standard')
+}
+
+function buildCostDetailRows(
+  log: UsageLog,
+  other: LogOtherData | null,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): TooltipRow[] {
+  const rows: TooltipRow[] = []
+  const tokens = getUsageTokens(log, other)
+  const ratio = getEffectiveRatio(other)
+  const ratioText =
+    ratio != null && Number.isFinite(ratio)
+      ? `${formatRatioCompact(ratio)}x`
+      : '-'
+  const chargedUSD =
+    (log.quota || 0) / getCurrencyDisplay().config.quotaPerUnit
+  let originalUSD: number | null = null
+
+  const hasModelRatio =
+    other?.model_ratio != null &&
+    Number.isFinite(other.model_ratio) &&
+    other.billing_mode !== 'tiered_expr' &&
+    !isPerCallBilling(other.model_price)
+
+  if (hasModelRatio && other) {
+    const inputPrice = other.model_ratio! * 2.0
+    const outputPrice =
+      other.completion_ratio != null && Number.isFinite(other.completion_ratio)
+        ? inputPrice * other.completion_ratio
+        : inputPrice
+    const cacheReadPrice =
+      other.cache_ratio != null && Number.isFinite(other.cache_ratio)
+        ? inputPrice * other.cache_ratio
+        : inputPrice
+
+    // Claude's prompt_tokens already excludes cache tokens; for other
+    // providers they are part of prompt_tokens and billed at cache rates.
+    const cacheInInput =
+      other.claude === true ? 0 : tokens.cacheRead + tokens.cacheWrite
+    const billableInput = Math.max(0, tokens.input - cacheInInput)
+    const inputCost = (billableInput / 1_000_000) * inputPrice
+    const outputCost = (tokens.output / 1_000_000) * outputPrice
+    const cacheReadCost = (tokens.cacheRead / 1_000_000) * cacheReadPrice
+    const cacheWriteCost =
+      (tokens.cacheWrite / 1_000_000) *
+      inputPrice *
+      toNonNegative(other.cache_creation_ratio ?? 1)
+    originalUSD =
+      inputCost + outputCost + cacheReadCost + cacheWriteCost
+
+    if (billableInput > 0) {
+      rows.push({
+        label: t('Input Cost'),
+        value: formatBillingCurrencyFromUSD(inputCost, AMOUNT_FORMAT_OPTS),
+      })
+    }
+    if (tokens.output > 0) {
+      rows.push({
+        label: t('Output Cost'),
+        value: formatBillingCurrencyFromUSD(outputCost, AMOUNT_FORMAT_OPTS),
+      })
+    }
+    rows.push({
+      label: t('Input Unit Price'),
+      value: `${formatBillingCurrencyFromUSD(inputPrice, UNIT_PRICE_FORMAT_OPTS)} / 1M Token`,
+    })
+    rows.push({
+      label: t('Output Unit Price'),
+      value: `${formatBillingCurrencyFromUSD(outputPrice, UNIT_PRICE_FORMAT_OPTS)} / 1M Token`,
+    })
+    if (tokens.cacheRead > 0) {
+      rows.push({
+        label: t('Cache Read Cost'),
+        value: formatBillingCurrencyFromUSD(cacheReadCost, AMOUNT_FORMAT_OPTS),
+      })
+    }
+  }
+
+  if (ratio != null && ratio > 0 && chargedUSD > 0) {
+    originalUSD = chargedUSD / ratio
+  }
+
+  rows.push({
+    label: t('Service Tier'),
+    value: getServiceTierLabel(other, t),
+    divider: true,
+  })
+  rows.push({ label: t('Ratio'), value: ratioText })
+
+  rows.push({
+    label: t('Original Cost'),
+    value:
+      originalUSD != null
+        ? formatBillingCurrencyFromUSD(originalUSD, AMOUNT_FORMAT_OPTS)
+        : formatBillingCurrencyFromUSD(chargedUSD, AMOUNT_FORMAT_OPTS),
+    divider: true,
+  })
+  rows.push({
+    label: t('User Charge'),
+    value: formatBillingCurrencyFromUSD(chargedUSD, AMOUNT_FORMAT_OPTS),
+    tone: 'highlight',
+  })
+
+  return rows
+}
+
+function DetailTooltipList({
+  title,
+  rows,
+}: {
+  title: string
+  rows: TooltipRow[]
+}) {
+  return (
+    <div className='flex w-60 flex-col gap-1.5'>
+      <p className='text-sm font-semibold'>{title}</p>
+      {rows.map((row, index) => (
+        <Fragment key={`${row.label}-${index}`}>
+          {row.divider && (
+            <div className='bg-background/20 my-0.5 h-px shrink-0' />
+          )}
+          <div className='flex items-center justify-between gap-3'>
+            <span className='text-background/70 shrink-0'>{row.label}</span>
+            <span
+              className={cn(
+                'font-mono text-xs tabular-nums',
+                row.tone === 'highlight' && 'text-emerald-300',
+                row.tone === 'accent' && 'text-sky-300',
+                row.tone === 'muted' && 'text-background/50'
+              )}
+            >
+              {row.value}
+            </span>
+          </div>
+        </Fragment>
+      ))}
+    </div>
+  )
 }
 
 function buildDetailSegments(
@@ -525,84 +740,61 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const useTime = row.getValue('use_time') as number
         const other = parseLogOther(log.other)
         const frt = other?.frt
+        const frtSeconds =
+          frt != null && Number.isFinite(frt) && frt > 0 ? frt / 1000 : null
         const tokensPerSecond =
           useTime > 0 && log.completion_tokens > 0
             ? log.completion_tokens / useTime
             : null
-        const timeVariant = getResponseTimeColor(useTime, log.completion_tokens)
-        const frtVariant = frt ? getFirstResponseTimeColor(frt / 1000) : null
-
-        const pillBg: Record<string, string> = {
-          success:
-            'border border-emerald-200/40 bg-emerald-50/35 dark:border-emerald-900/40 dark:bg-emerald-950/15',
-          warning:
-            'border border-amber-200/45 bg-amber-50/35 dark:border-amber-900/40 dark:bg-amber-950/15',
-          danger:
-            'border border-rose-200/50 bg-rose-50/35 dark:border-rose-900/40 dark:bg-rose-950/15',
-        }
-        const pillText: Record<string, string> = {
-          success: 'text-emerald-700/85 dark:text-emerald-400/85',
-          warning: 'text-amber-700/85 dark:text-amber-400/85',
-          danger: 'text-rose-700/85 dark:text-rose-400/85',
-        }
-        const pillDot: Record<string, string> = {
-          success: 'bg-emerald-500/80',
-          warning: 'bg-amber-500/80',
-          danger: 'bg-rose-500/80',
-        }
+        const frtPortion =
+          frtSeconds != null && useTime > 0
+            ? Math.min(100, Math.max(0, (frtSeconds / useTime) * 100))
+            : 0
+        const formatSeconds = (seconds: number) => `${seconds.toFixed(2)}s`
+        const streamError =
+          log.is_stream &&
+          other?.stream_status &&
+          other.stream_status.status !== 'ok'
 
         return (
-          <div className='flex flex-col gap-1'>
-            <div className='flex items-center gap-1.5'>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-xs font-medium',
-                  pillBg[timeVariant],
-                  pillText[timeVariant]
-                )}
-              >
-                <span
-                  className={cn(
-                    'size-1.5 shrink-0 rounded-full',
-                    pillDot[timeVariant]
-                  )}
-                  aria-hidden='true'
+          <div className='flex items-center gap-2'>
+            <div className='flex h-9 w-1 shrink-0 flex-col overflow-hidden rounded-full bg-emerald-400/80'>
+              {frtSeconds != null && (
+                <div
+                  className='w-full shrink-0 bg-amber-400/90'
+                  style={{ height: `${frtPortion}%` }}
                 />
-                {formatUseTime(useTime)}
-              </span>
-              {log.is_stream &&
-                (frt != null && frt > 0 ? (
-                  <span
-                    className={cn(
-                      'inline-flex items-center rounded-md px-1.5 py-0.5 font-mono text-xs font-medium',
-                      pillBg[frtVariant!],
-                      pillText[frtVariant!]
-                    )}
-                  >
-                    {formatUseTime(frt / 1000)}
-                  </span>
-                ) : (
-                  <span className='border-border/60 text-muted-foreground/50 inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px]'>
-                    N/A
-                  </span>
-                ))}
+              )}
             </div>
-            <div className='flex items-center gap-1 text-[11px]'>
-              <span className='text-muted-foreground/60'>
-                {log.is_stream ? t('Stream') : t('Non-stream')}
-                {tokensPerSecond != null && (
-                  <>
-                    {' · '}
-                    <span className='font-mono tabular-nums'>
-                      {Math.round(tokensPerSecond)}
-                    </span>
-                    {' t/s'}
-                  </>
-                )}
-              </span>
-              {log.is_stream &&
-                other?.stream_status &&
-                other.stream_status.status !== 'ok' && (
+            <div className='flex min-w-0 flex-col gap-0.5'>
+              {frtSeconds != null && (
+                <div className='flex items-center gap-1.5 text-xs'>
+                  <span className='text-muted-foreground/70 w-12 shrink-0'>
+                    {t('First Token Latency')}
+                  </span>
+                  <span className='font-mono text-amber-600 tabular-nums font-medium dark:text-amber-400'>
+                    {formatSeconds(frtSeconds)}
+                  </span>
+                </div>
+              )}
+              <div className='flex items-center gap-1.5 text-xs'>
+                <span className='text-muted-foreground/70 w-12 shrink-0'>
+                  {t('Total Duration')}
+                </span>
+                <span className='font-mono text-emerald-600 tabular-nums font-medium dark:text-emerald-400'>
+                  {formatSeconds(useTime)}
+                </span>
+              </div>
+              <div className='flex items-center gap-1.5 text-xs'>
+                <span className='text-muted-foreground/70 w-12 shrink-0'>
+                  {t('Output Speed')}
+                </span>
+                <span className='font-mono text-violet-600 tabular-nums font-medium dark:text-violet-400'>
+                  {tokensPerSecond != null
+                    ? `${tokensPerSecond.toFixed(1)} t/s`
+                    : '-'}
+                </span>
+                {streamError && other?.stream_status && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger
@@ -625,6 +817,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                     </Tooltip>
                   </TooltipProvider>
                 )}
+              </div>
             </div>
           </div>
         )
@@ -635,52 +828,86 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     {
       accessorKey: 'prompt_tokens',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title='Tokens' />
+        <DataTableColumnHeader column={column} title='Token' />
       ),
       cell: ({ row }) => {
         const log = row.original
         if (!isDisplayableLogType(log.type)) return null
 
         const other = parseLogOther(log.other)
-
-        const promptTokens = log.prompt_tokens || 0
-        const completionTokens = log.completion_tokens || 0
-        if (promptTokens === 0 && completionTokens === 0) {
+        const tokens = getUsageTokens(log, other)
+        if (tokens.input === 0 && tokens.output === 0) {
           return <span className='text-muted-foreground text-xs'>-</span>
         }
 
-        const cacheReadTokens = other?.cache_tokens || 0
-        const cacheWrite5m = other?.cache_creation_tokens_5m || 0
-        const cacheWrite1h = other?.cache_creation_tokens_1h || 0
-        const hasSplitCache = cacheWrite5m > 0 || cacheWrite1h > 0
-        const cacheWriteTokens = hasSplitCache
-          ? cacheWrite5m + cacheWrite1h
-          : other?.cache_creation_tokens || 0
+        const detailRows: TooltipRow[] = [
+          {
+            label: t('Input Tokens'),
+            value: tokens.input.toLocaleString(),
+          },
+          {
+            label: t('Output Tokens'),
+            value: tokens.output.toLocaleString(),
+          },
+          {
+            label: t('Cache Read Tokens'),
+            value: tokens.cacheRead.toLocaleString(),
+          },
+        ]
+        if (tokens.cacheWrite > 0) {
+          detailRows.push({
+            label: t('Cache Write'),
+            value: tokens.cacheWrite.toLocaleString(),
+          })
+        }
+        detailRows.push({
+          label: t('Total Token Count'),
+          value: tokens.total.toLocaleString(),
+          divider: true,
+        })
 
         return (
           <div className='flex flex-col gap-0.5'>
-            <span className='font-mono text-xs font-medium tabular-nums'>
-              {promptTokens.toLocaleString()} /{' '}
-              {completionTokens.toLocaleString()}
-            </span>
-            {(cacheReadTokens > 0 || cacheWriteTokens > 0) && (
-              <div className='flex items-center gap-1 text-[11px]'>
-                {cacheReadTokens > 0 && (
-                  <span className='text-muted-foreground/60'>
-                    {t('Cache')}↓ {cacheReadTokens.toLocaleString()}
-                  </span>
-                )}
-                {cacheWriteTokens > 0 && (
-                  <span className='text-muted-foreground/60'>
-                    ↑ {cacheWriteTokens.toLocaleString()}
-                  </span>
-                )}
+            <div className='flex items-center gap-1.5'>
+              <span className='font-mono text-xs font-medium tabular-nums'>
+                <span className='text-emerald-600 dark:text-emerald-400'>
+                  ↓ {tokens.input.toLocaleString()}
+                </span>
+                {' '}
+                <span className='text-sky-600 dark:text-sky-400'>
+                  ↑ {tokens.output.toLocaleString()}
+                </span>
+              </span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span className='text-muted-foreground/50 hover:text-foreground inline-flex cursor-help items-center leading-none' />
+                    }
+                  >
+                    <Info className='size-3' aria-hidden='true' />
+                  </TooltipTrigger>
+                  <TooltipContent className='rounded-lg px-3 py-2.5'>
+                    <DetailTooltipList
+                      title={t('Token Breakdown')}
+                      rows={detailRows}
+                    />
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            {tokens.cacheRead > 0 && (
+              <div className='text-muted-foreground/60 flex items-center gap-1 text-[11px]'>
+                <Clipboard className='size-3' aria-hidden='true' />
+                <span className='text-sky-600/80 font-mono tabular-nums dark:text-sky-400/80'>
+                  {formatTokens(tokens.cacheRead)}
+                </span>
               </div>
             )}
           </div>
         )
       },
-      meta: { label: 'Tokens', mobileHidden: true },
+      meta: { label: 'Token', mobileHidden: true },
     },
 
     {
@@ -721,13 +948,32 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           )
         }
 
-        const quotaStr = formatLogQuota(quota)
+        const chargedUSD =
+          quota / getCurrencyDisplay().config.quotaPerUnit
+        const costRows = buildCostDetailRows(log, other, t)
 
         return (
-          <div className='flex flex-col gap-0.5'>
-            <span className='border-border/80 bg-muted/60 inline-flex w-fit items-center rounded-md border px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums'>
-              {quotaStr}
+          <div className='flex items-center gap-1.5'>
+            <span className='font-mono text-emerald-600 text-xs font-semibold tabular-nums dark:text-emerald-400'>
+              {formatBillingCurrencyFromUSD(chargedUSD, AMOUNT_FORMAT_OPTS)}
             </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='text-muted-foreground/50 hover:text-foreground inline-flex cursor-help items-center leading-none' />
+                  }
+                >
+                  <Info className='size-3' aria-hidden='true' />
+                </TooltipTrigger>
+                <TooltipContent className='rounded-lg px-3 py-2.5'>
+                  <DetailTooltipList
+                    title={t('Cost Details')}
+                    rows={costRows}
+                  />
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         )
       },
