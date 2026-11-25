@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getUserModels } from '@/lib/api'
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { Button } from '@/components/ui/button'
 import { ComboboxInput } from '@/components/ui/combobox-input'
 import {
@@ -34,8 +35,10 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   buildCCSwitchImportURL,
+  buildCodeBuddyConfig,
   resolveAbsoluteHttpURL,
   withV1Endpoint,
+  type CodeBuddyConfigFormat,
 } from '../../lib/cc-switch'
 
 const APP_CONFIGS = {
@@ -70,6 +73,12 @@ const APP_CONFIGS = {
     defaultModel: 'grok-4.5',
     modelFields: [{ key: 'model', labelKey: 'Primary Model', required: true }],
   },
+  codebuddy: {
+    label: 'CodeBuddy',
+    importApp: null,
+    defaultName: 'My CodeBuddy',
+    modelFields: [{ key: 'model', labelKey: 'Primary Model', required: true }],
+  },
 } as const
 
 type AppType = keyof typeof APP_CONFIGS
@@ -102,6 +111,7 @@ interface Props {
 
 export function CCSwitchDialog(props: Props) {
   const { t } = useTranslation()
+  const { copyToClipboard } = useCopyToClipboard()
   const [app, setApp] = useState<AppType>('claude')
   const [name, setName] = useState<string>(APP_CONFIGS.claude.defaultName)
   const [models, setModels] = useState<Record<string, string>>({})
@@ -138,8 +148,12 @@ export function CCSwitchDialog(props: Props) {
     setModels(getDefaultModels(appVal))
   }
 
-  const handleSubmit = () => {
-    if (!models.model) {
+  const handleSubmit = async (format: CodeBuddyConfigFormat = 'cc-switch') => {
+    const model =
+      app === 'codebuddy'
+        ? models.model?.trim()
+        : models.model
+    if (!model) {
       toast.warning(t('Please select a primary model'))
       return
     }
@@ -147,6 +161,12 @@ export function CCSwitchDialog(props: Props) {
       ? props.tokenKey
       : `sk-${props.tokenKey}`
     const serverAddress = getServerAddress().replace(/\/+$/, '')
+    if (currentConfig.importApp === null) {
+      await copyToClipboard(
+        buildCodeBuddyConfig(serverAddress, name, model, key, format)
+      )
+      return
+    }
     const endpoint =
       app === 'grok' ? withV1Endpoint(serverAddress) : serverAddress
     const url = buildCCSwitchImportURL({
@@ -155,7 +175,7 @@ export function CCSwitchDialog(props: Props) {
       endpoint,
       homepage: serverAddress,
       apiKey: key,
-      models,
+      models: models,
     })
     window.open(url, '_self')
     props.onOpenChange(false)
@@ -174,7 +194,7 @@ export function CCSwitchDialog(props: Props) {
             <RadioGroup
               value={app}
               onValueChange={handleAppChange}
-              className='flex gap-4'
+              className='flex flex-wrap gap-x-4 gap-y-2'
             >
               {(
                 Object.entries(APP_CONFIGS) as [
@@ -222,13 +242,45 @@ export function CCSwitchDialog(props: Props) {
               />
             </div>
           ))}
+
+          {app === 'codebuddy' && (
+            <div className='text-muted-foreground space-y-2 text-sm'>
+              <p>
+                {t(
+                  'In CC Switch 4.0.41 or later, open CodeBuddy and choose Add Provider, then Custom. Enter a provider name and the selected model ID, paste into Configuration JSON, and save.'
+                )}
+              </p>
+              <p>
+                {t(
+                  'Paste the JSON into {{path}}. If the file already exists, merge the entry into {{models}} and add its ID to {{availableModels}} if that list is in use. Then select the model with {{command}}.',
+                  {
+                    path: '~/.codebuddy/models.json',
+                    models: 'models',
+                    availableModels: 'availableModels',
+                    command: '/model',
+                  }
+                )}
+              </p>
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={() => handleSubmit('models-file')}
+              >
+                {t('Copy Configuration')}
+              </Button>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant='outline' onClick={() => props.onOpenChange(false)}>
             {t('Cancel')}
           </Button>
-          <Button onClick={handleSubmit}>{t('Open CC Switch')}</Button>
+          <Button onClick={() => handleSubmit()}>
+            {app === 'codebuddy'
+              ? t('Copy CC Switch JSON')
+              : t('Open CC Switch')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

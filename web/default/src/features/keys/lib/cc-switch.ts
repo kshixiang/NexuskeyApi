@@ -74,6 +74,40 @@ export function withV1Endpoint(baseUrl: string): string {
     : `${normalizedBaseUrl}/v1`
 }
 
+function chatCompletionsEndpoint(serverAddress: string): URL {
+  const url = new URL(serverAddress)
+  const path = url.pathname.replace(/\/+$/, '')
+  url.pathname = path.endsWith('/chat/completions')
+    ? path
+    : `${withV1Endpoint(path)}/chat/completions`
+  url.hash = ''
+  return url
+}
+
+export type CodeBuddyConfigFormat = 'cc-switch' | 'models-file'
+
+export function buildCodeBuddyConfig(
+  serverAddress: string,
+  name: string,
+  model: string,
+  apiKey: string,
+  format: CodeBuddyConfigFormat
+): string {
+  const modelConfig = {
+    id: model,
+    name: model,
+    vendor: name.trim() || 'CodeBuddy',
+    url: chatCompletionsEndpoint(serverAddress).toString(),
+    apiKey,
+    supportsToolCall: true,
+  }
+  return JSON.stringify(
+    format === 'cc-switch' ? modelConfig : { models: [modelConfig] },
+    null,
+    2
+  )
+}
+
 export function buildCCSwitchImportURL(input: CCSwitchImportInput): string {
   const endpoint = resolveAbsoluteHttpURL(input.endpoint)
   const homepage = resolveAbsoluteHttpURL(input.homepage)

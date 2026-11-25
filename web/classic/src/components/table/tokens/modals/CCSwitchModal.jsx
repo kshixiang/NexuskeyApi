@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import React, { useState, useEffect, useMemo } from 'react';
 import {
+  Button,
   Modal,
   RadioGroup,
   Radio,
@@ -27,7 +28,7 @@ import {
   Typography,
 } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
-import { selectFilter } from '../../../../helpers';
+import { copy, selectFilter } from '../../../../helpers';
 
 const APP_CONFIGS = {
   claude: {
@@ -59,6 +60,11 @@ const APP_CONFIGS = {
     importApp: 'grokbuild',
     defaultName: 'My Grok',
     defaultModel: 'grok-4.5',
+    modelFields: [{ key: 'model', label: '主模型' }],
+  },
+  codebuddy: {
+    label: 'CodeBuddy',
+    defaultName: 'My CodeBuddy',
     modelFields: [{ key: 'model', label: '主模型' }],
   },
 };
@@ -115,6 +121,32 @@ function withV1Endpoint(baseUrl) {
   return normalizedBaseUrl.endsWith('/v1')
     ? normalizedBaseUrl
     : `${normalizedBaseUrl}/v1`;
+}
+
+function chatCompletionsEndpoint(serverAddress) {
+  const url = new URL(serverAddress);
+  const path = url.pathname.replace(/\/+$/, '');
+  url.pathname = path.endsWith('/chat/completions')
+    ? path
+    : `${withV1Endpoint(path)}/chat/completions`;
+  url.hash = '';
+  return url;
+}
+
+function buildCodeBuddyConfig(serverAddress, name, model, apiKey, format) {
+  const modelConfig = {
+    id: model,
+    name: model,
+    vendor: name.trim() || 'CodeBuddy',
+    url: chatCompletionsEndpoint(serverAddress).toString(),
+    apiKey,
+    supportsToolCall: true,
+  };
+  return JSON.stringify(
+    format === 'cc-switch' ? modelConfig : { models: [modelConfig] },
+    null,
+    2,
+  );
 }
 
 function getDefaultModels(app) {
@@ -175,12 +207,28 @@ export default function CCSwitchModal({
     setModels((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = () => {
-    if (!models.model) {
+  const handleSubmit = async (format = 'cc-switch') => {
+    const model = app === 'codebuddy' ? models.model?.trim() : models.model;
+    if (!model) {
       Toast.warning(t('请选择主模型'));
       return;
     }
     const key = tokenKey.startsWith('sk-') ? tokenKey : `sk-${tokenKey}`;
+    if (app === 'codebuddy') {
+      const config = buildCodeBuddyConfig(
+        getServerAddress(),
+        name,
+        model,
+        key,
+        format,
+      );
+      if (await copy(config)) {
+        Toast.success(t('复制成功'));
+      } else {
+        Toast.error(t('复制失败'));
+      }
+      return;
+    }
     const url = buildCCSwitchURL(app, name, models, key);
     window.open(url, '_self');
     onClose();
@@ -200,8 +248,10 @@ export default function CCSwitchModal({
       title={t('填入 CC Switch')}
       visible={visible}
       onCancel={onClose}
-      onOk={handleSubmit}
-      okText={t('打开 CC Switch')}
+      onOk={() => handleSubmit()}
+      okText={
+        app === 'codebuddy' ? t('复制 CC Switch JSON') : t('打开 CC Switch')
+      }
       cancelText={t('取消')}
       maskClosable={false}
       width={480}
@@ -253,6 +303,30 @@ export default function CCSwitchModal({
             />
           </div>
         ))}
+
+        {app === 'codebuddy' && (
+          <div style={{ display: 'grid', gap: 8, justifyItems: 'start' }}>
+            <Typography.Text type='secondary'>
+              {t(
+                '在 CC Switch 4.0.41 或更高版本中，进入 CodeBuddy，选择「添加供应商」里的「自定义」。填写供应商名称和所选模型 ID，将内容粘贴到「配置 JSON」并保存。',
+              )}
+            </Typography.Text>
+            <Typography.Text type='secondary'>
+              {t(
+                '将 JSON 粘贴到 {{path}}。如果文件已存在，将模型条目合并到 {{models}}。如果已启用 {{availableModels}} 列表，也将模型 ID 加入该列表。最后通过 {{command}} 选择模型。',
+                {
+                  path: '~/.codebuddy/models.json',
+                  models: 'models',
+                  availableModels: 'availableModels',
+                  command: '/model',
+                },
+              )}
+            </Typography.Text>
+            <Button size='small' onClick={() => handleSubmit('models-file')}>
+              {t('复制配置')}
+            </Button>
+          </div>
+        )}
       </div>
     </Modal>
   );
