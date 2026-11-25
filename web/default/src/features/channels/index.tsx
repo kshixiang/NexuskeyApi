@@ -16,15 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { SectionPageLayout } from '@/components/layout'
 import { ChannelsDialogs } from './components/channels-dialogs'
 import { ChannelsPrimaryButtons } from './components/channels-primary-buttons'
 import { ChannelsProvider } from './components/channels-provider'
 import { ChannelsTable } from './components/channels-table'
+import { UpstreamQuotes } from './components/upstream-quotes'
 
 export function Channels() {
   const { t } = useTranslation()
+  const [tab, setTab] = useState('channels')
   return (
     <ChannelsProvider>
       <SectionPageLayout>
@@ -33,10 +37,23 @@ export function Channels() {
           {t('Manage API channels and provider configurations')}
         </SectionPageLayout.Description>
         <SectionPageLayout.Actions>
-          <ChannelsPrimaryButtons />
+          {tab === 'channels' && <ChannelsPrimaryButtons />}
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <ChannelsTable />
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList>
+              <TabsTrigger value='channels'>{t('Channels')}</TabsTrigger>
+              <TabsTrigger value='upstream-quotes'>
+                {t('Upstream channel quotes')}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value='channels'>
+              <ChannelsTable />
+            </TabsContent>
+            <TabsContent value='upstream-quotes'>
+              <UpstreamQuotes />
+            </TabsContent>
+          </Tabs>
         </SectionPageLayout.Content>
       </SectionPageLayout>
 

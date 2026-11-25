@@ -39,7 +39,7 @@ func InitChannelCache() {
 		newGroup2model2channels[group] = make(map[string][]int)
 	}
 	for _, channel := range channels {
-		if channel.Status != common.ChannelStatusEnabled {
+		if channel.Status != common.ChannelStatusEnabled || IsUpstreamSaleGroup(channel.Group) {
 			continue // skip disabled channels
 		}
 		groups := strings.Split(channel.Group, ",")

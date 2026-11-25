@@ -239,6 +239,16 @@ func SetApiRouter(router *gin.Engine) {
 		}
 		// Read-only channel status is visible to every authenticated user.
 		apiRouter.GET("/channel/status", middleware.UserAuth(), controller.GetChannelStatus)
+		upstreamQuoteRoute := apiRouter.Group("/upstream-quotes", middleware.AdminAuth(), middleware.DisableCache())
+		upstreamQuoteRoute.GET("", controller.ListUpstreamQuoteChannels)
+		upstreamQuoteRoute.POST("/import/:action", controller.ImportUpstreamQuotes)
+		upstreamQuoteRoute.GET("/source/:source", controller.LoadUpstreamQuoteSnapshot)
+		upstreamQuoteRoute.PUT("/channels/:id", controller.RenameUpstreamQuoteChannel)
+		upstreamQuoteRoute.GET("/groups/:id", controller.GetUpstreamQuoteGroup)
+		upstreamQuoteRoute.PUT("/groups/:id", controller.SaveUpstreamQuoteGroup)
+		upstreamQuoteRoute.PUT("/groups/:id/quote", controller.SaveUpstreamModelQuote)
+		upstreamQuoteRoute.POST("/groups/:id/listing", controller.PublishUpstreamQuoteGroup)
+		upstreamQuoteRoute.POST("/compare", controller.CompareUpstreamQuotes)
 		channelRoute := apiRouter.Group("/channel")
 		channelRoute.Use(middleware.AdminAuth())
 		{

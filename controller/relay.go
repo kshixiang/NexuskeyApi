@@ -179,10 +179,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}()
 
 	retryParam := &service.RetryParam{
-		Ctx:        c,
-		TokenGroup: relayInfo.TokenGroup,
-		ModelName:  relayInfo.OriginModelName,
-		Retry:      common.GetPointer(0),
+		Ctx:          c,
+		TokenGroup:   relayInfo.TokenGroup,
+		ModelName:    relayInfo.OriginModelName,
+		Retry:        common.GetPointer(0),
+		RelayStarted: true,
 	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
@@ -290,6 +291,9 @@ func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
 }
 
 func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, *types.NewAPIError) {
+	if value, ok := common.GetContextKey(c, constant.ContextKeyUpstreamSaleRoute); ok {
+		return &value.(*model.UpstreamSaleRoute).Channel, nil
+	}
 	if info.ChannelMeta == nil {
 		autoBan := c.GetBool("auto_ban")
 		autoBanInt := 1
@@ -323,6 +327,10 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 
 func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) bool {
 	if openaiErr == nil {
+		return false
+	}
+	if _, ok := common.GetContextKey(c, constant.ContextKeyUpstreamSaleRoute); ok {
+		// A published group has a single execution channel.
 		return false
 	}
 	if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {

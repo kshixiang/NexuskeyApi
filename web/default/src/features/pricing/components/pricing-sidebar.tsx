@@ -66,6 +66,7 @@ export interface PricingSidebarProps {
   onTagChange: (value: string) => void
   vendors: PricingVendor[]
   groups: string[]
+  groupNames?: Record<string, string>
   groupRatios?: Record<string, number>
   tags: string[]
   models: PricingModel[]
@@ -185,7 +186,7 @@ export function PricingSidebar(props: PricingSidebarProps) {
     },
     ...props.groups.map((group) => ({
       value: group,
-      label: group,
+      label: props.groupNames?.[group] ?? group,
       suffix: formatGroupRatio(props.groupRatios?.[group]),
     })),
   ]

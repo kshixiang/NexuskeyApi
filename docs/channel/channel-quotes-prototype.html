@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>上游渠道 · 分组上架草图</title>
+  <style>
+    :root { color-scheme: light; --bg:#f5f7fb; --ink:#18223a; --muted:#5d6b83; --border:#e2e7f0; --blue:#3457df; --blue-bg:#edf1ff; --green:#196547; --green-bg:#e9f6ee; font:14px/1.55 Inter,"Microsoft YaHei UI","PingFang SC",sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--bg); }
+    h1,h2,h3,p,dl,dd { margin:0; }
+    button,input,select { font:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:default; opacity:.5; }
+    :focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+    [hidden] { display:none !important; }
+    a { color:var(--blue); text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    .wrap { max-width:1440px; margin:auto; padding-inline:46px; }
+    .bar { background:#fff; border-bottom:1px solid var(--border); }
+    .bar-inner,.heading,.card-header,.group-title,.actions,.model-toolbar,.row,.foot { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .bar-inner { min-height:65px; }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:750; }
+    .mark { display:grid; place-items:center; width:34px; height:34px; border-radius:8px; color:#fff; background:var(--blue); }
+    .sub { color:var(--muted); font-size:13px; }
+    .crumb strong { color:var(--ink); }
+    .badge { display:inline-block; border-radius:6px; padding:3px 8px; white-space:nowrap; font-size:12px; font-weight:650; background:#edf1f7; color:#475672; }
+    .badge.blue { background:var(--blue-bg); color:#294ccf; }
+    .badge.live { background:var(--green-bg); color:var(--green); }
+    .badge.pending { background:#fff1d9; color:#835315; }
+    main { padding-block:23px 29px; }
+    h1 { font-size:32px; letter-spacing:-.6px; }
+    h2 { font-size:22px; }
+    h3 { font-size:16px; }
+    .heading { align-items:end; margin-bottom:17px; }
+    .button { padding:8px 13px; min-height:38px; border:1px solid #dbe2ef; border-radius:8px; background:#fff; color:var(--ink); font-weight:700; white-space:nowrap; }
+    .button.primary { border-color:var(--blue); background:var(--blue); color:#fff; }
+    .layout { display:grid; grid-template-columns:305px minmax(0,1fr); gap:16px; align-items:start; }
+    .card { min-width:0; border:1px solid var(--border); border-radius:12px; background:#fff; box-shadow:0 2px 8px #24325407; }
+    .sidebar { overflow:hidden; }
+    .card-header { padding:13px 15px; border-bottom:1px solid var(--border); }
+    .source { padding:12px 9px 10px; }
+    .source + .source { border-top:1px solid var(--border); }
+    .source-title { display:flex; align-items:center; gap:9px; padding:0 5px 8px; }
+    .source-icon { display:grid; place-items:center; min-width:28px; height:28px; border-radius:7px; background:#eef2ff; color:#3656d4; font-weight:750; }
+    .source-title strong { flex:1; }
+    .source-id { color:var(--muted); font-size:12px; }
+    .group-link { width:100%; display:flex; justify-content:space-between; align-items:center; gap:5px; border:1px solid transparent; border-radius:7px; background:#fff; color:var(--ink); padding:8px; text-align:left; }
+    .group-link:hover { background:#f6f8ff; }
+    .group-link[aria-current="true"] { border-color:#dae3ff; background:#edf2ff; color:#2449c7; }
+    .group-link strong { display:block; font-weight:675; }
+    .group-link small { display:block; color:var(--muted); font-size:11px; }
+    .main-stack { display:grid; gap:14px; }
+    .summary { padding:16px 17px; }
+    .detail-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; }
+    .summary-id { margin-left:2px; color:var(--muted); font-size:13px; }
+    .settings { display:grid; grid-template-columns:minmax(230px,1.25fr) minmax(210px,1fr); gap:15px; }
+    .settings .card { padding:15px 16px; }
+    .settings h3 { margin-bottom:3px; }
+    .row { justify-content:flex-start; margin:10px 0 6px; }
+    .key-display { flex:1; padding:7px 9px; min-height:35px; overflow-wrap:anywhere; border:1px solid var(--border); border-radius:7px; background:#f7f9fc; }
+    .code { font-family:"IBM Plex Mono",Consolas,"Microsoft YaHei UI",monospace; font-variant-numeric:tabular-nums; }
+    .multiplier { display:flex; align-items:center; gap:5px; width:106px; padding:5px 9px; border:1px solid #dce3f0; border-radius:7px; }
+    .multiplier input { width:68px; border:0; color:var(--ink); background:#fff; font-weight:700; }
+    .gross { margin-left:6px; padding:5px 8px; background:var(--green-bg); border-radius:6px; color:var(--green); font-size:12px; font-weight:650; white-space:nowrap; }
+    .model-toolbar { padding:13px 16px 10px; }
+    .scroll { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; text-align:left; }
+    th,td { padding:8px 10px; border-bottom:1px solid #edf0f5; white-space:nowrap; }
+    th { background:#f7f9fd; color:var(--muted); font-size:12px; font-weight:650; }
+    th:first-child,td:first-child { padding-left:16px; }
+    th:last-child,td:last-child { padding-right:16px; }
+    td:first-child { font-weight:675; }
+    td:nth-child(odd):not(:first-child) { color:#2846b0; font-weight:700; background:#f7f9ff; }
+    tbody tr:last-child td { border-bottom:0; }
+    .foot { padding:12px 16px; border-top:1px solid var(--border); }
+    #message { color:var(--green); font-size:13px; }
+    dialog { width:min(500px,calc(100% - 32px)); padding:19px; border:1px solid var(--border); border-radius:12px; color:var(--ink); }
+    dialog::backdrop { background:#17224360; }
+    dialog p { margin:7px 0 12px; }
+    dialog label { display:block; font-weight:600; }
+    dialog input,dialog select { display:block; width:100%; margin:5px 0 13px; padding:7px 9px; border:1px solid var(--border); border-radius:7px; }
+    dialog .actions { justify-content:flex-end; }
+    @media(max-width:1000px) { .wrap { padding-inline:20px; } .layout { grid-template-columns:235px minmax(0,1fr); } .settings { grid-template-columns:1fr; } }
+    @media(max-width:690px) { .wrap { padding-inline:14px; } .layout { grid-template-columns:1fr; } .group-title,.heading,.foot { flex-wrap:wrap; } .crumb { display:none; } }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <div class="wrap bar-inner">
+      <div class="brand"><span class="mark" aria-hidden="true">N</span> 管理后台</div>
+      <div class="sub crumb">模型与渠道 <span aria-hidden="true">/</span> <strong>上游渠道</strong></div>
+      <span class="badge">界面草图</span>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="heading">
+      <div><h1>上游渠道</h1><p class="sub">导入上游报价，按分组配置 API Key、定价并上架。</p></div>
+      <button class="button primary" id="import-button" type="button">导入渠道报价</button>
+    </div>
+    <div class="layout">
+      <nav class="card sidebar" aria-label="已导入渠道与分组">
+        <div class="card-header"><h3>已导入渠道</h3><span class="sub" id="channel-count"></span></div>
+        <div id="channels"></div>
+      </nav>
+      <div class="main-stack">
+        <section class="card summary" aria-labelledby="group-name">
+          <div class="group-title">
+            <div>
+              <h2 id="group-name"></h2>
+              <div class="detail-meta">
+                <span class="sub" id="source-group"></span>
+                <span class="badge" id="source-multiplier"></span>
+                <a id="source-link" class="sub" target="_blank" rel="noreferrer">查看上游 ↗</a>
+              </div>
+            </div>
+            <span id="listing-status" class="badge pending"></span>
+          </div>
+        </section>
+        <div class="settings">
+          <section class="card" aria-labelledby="key-title">
+            <h3 id="key-title">分组 API Key</h3>
+            <p class="sub">此分组请求使用的上游凭证。</p>
+            <div class="row">
+              <span class="key-display code" id="key-display"></span>
+              <button class="button" id="key-button" type="button"></button>
+            </div>
+            <p class="sub" id="key-note"></p>
+          </section>
+          <section class="card" aria-labelledby="multiplier-title">
+            <h3 id="multiplier-title"><label for="markup">本站售价倍率</label></h3>
+            <p class="sub">本站售价 = 上游实付价 × 倍率</p>
+            <div class="row">
+              <div class="multiplier"><input id="markup" class="code" type="number" min="0.01" step="0.01" required><span aria-hidden="true">×</span></div>
+              <span class="gross" id="gross"></span>
+            </div>
+            <p class="sub" id="markup-note">按同一倍率换算本组的各项单价。</p>
+          </section>
+        </div>
+        <section class="card" aria-labelledby="model-title">
+          <div class="model-toolbar">
+            <div><h3 id="model-title">分组模型与售价预览</h3><p class="sub">上架后，表中模型通过此销售分组提供。</p></div>
+            <span class="sub">USD / 百万 Token</span>
+          </div>
+          <div class="scroll">
+            <table aria-label="上游实付与本站售价">
+              <thead><tr><th scope="col">模型</th><th scope="col">输入实付</th><th scope="col">输入售价</th><th scope="col">输出实付</th><th scope="col">输出售价</th><th scope="col">缓存读实付</th><th scope="col">缓存读售价</th></tr></thead>
+              <tbody id="models"></tbody>
+            </table>
+          </div>
+          <div class="foot">
+            <p class="sub" id="publish-hint"></p>
+            <div class="actions">
+              <button class="button" id="save" type="button">保存设置</button>
+              <button class="button primary" id="publish" type="button">上架该分组</button>
+            </div>
+          </div>
+        </section>
+        <p id="message" role="status"></p>
+      </div>
+    </div>
+  </main>
+
+  <dialog id="key-dialog">
+    <form id="key-form">
+      <h3>配置分组 API Key</h3>
+      <p class="sub" id="key-target"></p>
+      <label for="key-input">上游 API Key</label>
+      <input id="key-input" type="password" placeholder="输入演示 Key" autocomplete="off" required>
+      <div class="actions"><button class="button" type="button" data-close="key-dialog">取消</button><button class="button primary" type="submit">保存 Key</button></div>
+    </form>
+  </dialog>
+  <dialog id="import-dialog">
+    <form id="import-form">
+      <h3>导入渠道报价</h3>
+      <p class="sub">首次导入分配渠道 ID，同一渠道的分组共享这个 ID。</p>
+      <label for="import-source">上游渠道</label>
+      <select id="import-source"><option>Kedaya</option><option>String AI</option></select>
+      <div class="actions"><button class="button" type="button" data-close="import-dialog">取消</button><button class="button primary" type="submit">模拟导入</button></div>
+    </form>
+  </dialog>
+  <script>
+    const byId = (id) => document.getElementById(id)
+    const sources = [
+      {
+        name: 'Kedaya',
+        url: 'https://kedaya.ai/model-plaza?embedded=1',
+        groups: [
+          { name: 'DeepSeek 特殊渠道', sourceRatio: '0.05×', markup: 1.3, keySuffix: '7A2F', models: [
+            ['deepseek-v4.1-flash', 0.05, 0.20, 0.001],
+            ['deepseek-v4.1-flash-1017', 0.05, 0.20, 0.001],
+            ['deepseek-v4-flash', 0.05, 0.20, 0.001],
+            ['deepseek-flash', 0.05, 0.20, 0.001],
+          ] },
+          { name: 'GPT 0.05 不降智', sourceRatio: '0.05×', markup: 1.25, models: [['gpt-6.2-sol', 0.10, 0.50, 0.005], ['gpt-6.2-astra', 0.40, 2.00, 0.02]] },
+          { name: 'Kiro', sourceRatio: '0.05×', markup: 1.25, models: [['claude-opus-4-8', 0.25, 1.25, 0.025], ['claude-opus-4-7', 0.25, 1.25, 0.025]] },
+          { name: 'Kimi 官key', sourceRatio: '0.3×', markup: 1.25, models: [['kimi-k3', 6, 30, 0.60]] },
+        ],
+      },
+      {
+        name: 'String AI',
+        url: 'https://www.string.ink/dashboard/pricing',
+        groups: [
+          { name: 'OpenAI', markup: 1.3, models: [['gpt-6.2-sol', 0.06, 0.30, 0.003]] },
+          { name: 'OpenAI【UltraFast 8倍速】', markup: 1.3, models: [['gpt-6.2-sol', 0.18, 0.90, null]] },
+        ],
+      },
+    ]
+    let nextChannelId = 1001
+    const importedChannels = new Map()
+    function importChannel(source) {
+      if (!importedChannels.has(source.name)) importedChannels.set(source.name, { ...source, id: nextChannelId++ })
+      return importedChannels.get(source.name)
+    }
+    const channels = sources.map(importChannel)
+    let activeChannel = channels[0]
+    let activeGroup = activeChannel.groups[0]
+    const fullName = (channel, group) => channel.id + '_' + group.name
+    const groupStatus = (group) => group.live ? '已上架' : group.keySuffix ? '待上架' : '待配置'
+    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 6 })
+    const percent = new Intl.NumberFormat('zh-CN', { style: 'percent', maximumFractionDigits: 2 })
+    const validMarkup = () => byId('markup').validity.valid && Number.isFinite(byId('markup').valueAsNumber)
+    const displayPrice = (price) => price === null ? '—' : money.format(price)
+
+    function renderChannels() {
+      byId('channel-count').textContent = channels.length + ' 个渠道'
+      byId('channels').innerHTML = channels.map((channel, channelIndex) =>
+        '<section class="source"><div class="source-title"><span class="source-icon" aria-hidden="true">' +
+        channel.name[0] + '</span><strong>' + channel.name + '</strong><span class="source-id code">渠道 #' + channel.id +
+        '</span></div>' + channel.groups.map((group, groupIndex) =>
+          '<button class="group-link" type="button" data-channel="' + channelIndex + '" data-group="' + groupIndex +
+          '" aria-current="' + (group === activeGroup) + '"><span><strong>' + group.name + '</strong><small>' + fullName(channel, group) +
+          '</small></span><span class="badge ' + (group.live ? 'live' : group.keySuffix ? 'pending' : '') + '">' + groupStatus(group) + '</span></button>'
+        ).join('') + '</section>'
+      ).join('')
+    }
+
+    function renderPrices() {
+      const markup = validMarkup() ? byId('markup').valueAsNumber : null
+      byId('gross').textContent = markup === null ? '请输入有效倍率' : '预估毛利率 ' + percent.format((markup - 1) / markup)
+      const canPublish = activeGroup.keySuffix && markup !== null
+      byId('publish').disabled = !canPublish
+      byId('save').disabled = markup === null
+      byId('publish-hint').textContent = activeGroup.keySuffix ? '上架范围为当前分组。' : '配置上游 API Key 后可上架。'
+      byId('models').innerHTML = activeGroup.models.map(([model, ...prices]) => {
+        const cells = prices.map((price) => '<td>' + displayPrice(price) + '</td><td>' +
+          displayPrice(price === null || markup === null ? null : price * markup) + '</td>').join('')
+        return '<tr class="code"><td>' + model + '</td>' + cells + '</tr>'
+      }).join('')
+    }
+
+    function renderGroup() {
+      const group = activeGroup
+      byId('group-name').textContent = fullName(activeChannel, group)
+      byId('source-group').textContent = activeChannel.name + ' · 渠道 #' + activeChannel.id + ' · 原分组 ' + group.name
+      byId('source-link').href = activeChannel.url
+      byId('source-multiplier').hidden = !group.sourceRatio
+      byId('source-multiplier').textContent = group.sourceRatio ? '上游折扣 ' + group.sourceRatio : ''
+      byId('listing-status').textContent = groupStatus(group)
+      byId('listing-status').className = 'badge ' + (group.live ? 'live' : 'pending')
+      byId('key-display').textContent = group.keySuffix ? '•••• •••• ' + group.keySuffix : '未配置'
+      byId('key-button').textContent = group.keySuffix ? '更换 Key' : '配置 Key'
+      byId('key-note').textContent = group.keySuffix ? '只显示已配置 Key 的末尾字符。' : '该分组使用独立的上游 Key。'
+      byId('markup').value = group.markup.toFixed(2)
+      byId('publish').textContent = group.live ? '更新已上架分组' : '上架该分组'
+      renderChannels()
+      renderPrices()
+    }
+
+    byId('channels').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-group]')
+      if (!button) return
+      activeChannel = channels[Number(button.dataset.channel)]
+      activeGroup = activeChannel.groups[Number(button.dataset.group)]
+      byId('message').textContent = ''
+      renderGroup()
+    })
+    byId('markup').addEventListener('input', renderPrices)
+    byId('save').onclick = () => {
+      activeGroup.markup = byId('markup').valueAsNumber
+      byId('message').textContent = '已保存 ' + fullName(activeChannel, activeGroup) + ' 的演示设置。'
+    }
+    byId('publish').onclick = () => {
+      if (!activeGroup.keySuffix || !validMarkup()) return
+      activeGroup.markup = byId('markup').valueAsNumber
+      activeGroup.live = true
+      renderGroup()
+      byId('message').textContent = '已模拟上架 ' + fullName(activeChannel, activeGroup) + '，包含 ' + activeGroup.models.length + ' 个模型。'
+    }
+    byId('key-button').onclick = () => {
+      byId('key-target').textContent = fullName(activeChannel, activeGroup) + ' · ' + activeChannel.name + ' · 仅填写演示值'
+      byId('key-input').value = ''
+      byId('key-dialog').showModal()
+    }
+    byId('key-form').addEventListener('submit', (event) => {
+      event.preventDefault()
+      const key = byId('key-input').value.trim()
+      if (!key) return
+      activeGroup.keySuffix = key.slice(-4)
+      byId('key-input').value = ''
+      byId('key-dialog').close()
+      renderGroup()
+      byId('message').textContent = '已保存当前分组的演示 Key。'
+    })
+    byId('import-button').onclick = () => byId('import-dialog').showModal()
+    byId('import-form').addEventListener('submit', (event) => {
+      event.preventDefault()
+      const source = sources[byId('import-source').selectedIndex]
+      activeChannel = importChannel(source)
+      activeGroup = activeChannel.groups[0]
+      byId('import-dialog').close()
+      renderGroup()
+      byId('message').textContent = '已模拟更新 ' + activeChannel.name + ' 报价，渠道 ID 为 #' + activeChannel.id + '。'
+    })
+    document.querySelectorAll('[data-close]').forEach((button) => {
+      button.onclick = () => byId(button.dataset.close).close()
+    })
+    renderGroup()
+  </script>
+</body>
+</html>

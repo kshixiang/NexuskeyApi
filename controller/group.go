@@ -29,6 +29,11 @@ func GetUserGroups(c *gin.Context) {
 	userId := c.GetInt("id")
 	userGroup, _ = model.GetUserGroup(userId, false)
 	userUsableGroups := service.GetUserUsableGroups(userGroup)
+	for key, name := range userUsableGroups {
+		if model.IsUpstreamSaleGroup(key) {
+			usableGroups[key] = map[string]interface{}{"ratio": 1, "desc": name}
+		}
+	}
 	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
 		// UserUsableGroups contains the groups that the user can use
 		if desc, ok := userUsableGroups[groupName]; ok {

@@ -3,8 +3,10 @@ package helper
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -65,6 +67,20 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 }
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
+	if value, ok := common.GetContextKey(c, constant.ContextKeyUpstreamSaleRoute); ok {
+		route := value.(*model.UpstreamSaleRoute)
+		info.UsingGroup = route.Group
+		groupRatio := types.GroupRatioInfo{GroupRatio: 1, GroupSpecialRatio: -1}
+		if !route.Fixed {
+			return modelPriceHelperExpression(c, info, promptTokens, meta, groupRatio, route.Expression, info.StartTime)
+		}
+		price := types.PriceData{
+			UsePrice: true, ModelPrice: route.FixedPrice, GroupRatioInfo: groupRatio,
+			QuotaToPreConsume: billingexpr.QuotaRound(route.FixedPrice * common.QuotaPerUnit),
+		}
+		info.PriceData = price
+		return price, nil
+	}
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
 
 	groupRatioInfo := HandleGroupRatio(c, info)
@@ -285,7 +301,10 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 	if !ok {
 		return types.PriceData{}, fmt.Errorf("model %s is configured as tiered_expr but has no billing expression", info.OriginModelName)
 	}
+	return modelPriceHelperExpression(c, info, promptTokens, meta, groupRatioInfo, exprStr, time.Time{})
+}
 
+func modelPriceHelperExpression(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta, groupRatioInfo types.GroupRatioInfo, exprStr string, at time.Time) (types.PriceData, error) {
 	estimatedCompletionTokens := 0
 	if meta.MaxTokens != 0 {
 		estimatedCompletionTokens = meta.MaxTokens
@@ -295,6 +314,7 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 	if err != nil {
 		return types.PriceData{}, err
 	}
+	requestInput.At = at
 
 	rawCost, trace, err := billingexpr.RunExprWithRequest(exprStr, billingexpr.TokenParams{
 		P:   float64(promptTokens),

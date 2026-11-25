@@ -51,6 +51,16 @@ func Distribute() func(c *gin.Context) {
 				abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorChannelDisabled))
 				return
 			}
+			usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+			if model.IsUpstreamSaleGroup(usingGroup) || model.IsUpstreamSaleGroup(channel.Group) {
+				route, routeErr := model.ResolveUpstreamSaleRoute(usingGroup, modelRequest.Model)
+				if routeErr != nil || route == nil || route.Channel.Id != id {
+					abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorGroupAccessDenied))
+					return
+				}
+				channel = &route.Channel
+				common.SetContextKey(c, constant.ContextKeyUpstreamSaleRoute, route)
+			}
 		} else {
 			// Select a channel for the user
 			// check token model mapping
@@ -99,9 +109,9 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
-				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
+				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found && !model.IsUpstreamSaleGroup(usingGroup) {
 					preferred, err := model.CacheGetChannel(preferredChannelID)
-					if err == nil && preferred != nil {
+					if err == nil && preferred != nil && !model.IsUpstreamSaleGroup(preferred.Group) {
 						if preferred.Status != common.ChannelStatusEnabled {
 							if service.ShouldSkipRetryAfterChannelAffinityFailure(c) {
 								abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorAffinityChannelDisabled))
@@ -156,6 +166,13 @@ func Distribute() func(c *gin.Context) {
 			}
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
+		if value, exists := common.GetContextKey(c, constant.ContextKeyUpstreamSaleRoute); exists {
+			route := value.(*model.UpstreamSaleRoute)
+			if !service.UpstreamEndpointAllowed(c.Request.URL.Path, route) {
+				abortWithOpenAiMessage(c, http.StatusBadRequest, "This sales group has no published price for this model and endpoint", types.ErrorCodeModelNotFound)
+				return
+			}
+		}
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {

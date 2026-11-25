@@ -152,7 +152,8 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		return nil
 	}
 
-	if strings.HasPrefix(info.OriginModelName, "gpt-4o-audio") {
+	_, publishedPrice := common.GetContextKey(c, appconstant.ContextKeyUpstreamSaleRoute)
+	if strings.HasPrefix(info.OriginModelName, "gpt-4o-audio") && !publishedPrice {
 		service.PostAudioConsumeQuota(c, info, usageDto, "")
 	} else {
 		service.PostTextConsumeQuota(c, info, usageDto, nil)

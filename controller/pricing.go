@@ -2,6 +2,7 @@ package controller
 
 import (
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -56,6 +57,37 @@ func GetPricing(c *gin.Context) {
 	}
 
 	usableGroup = service.GetUserUsableGroups(group)
+	supportedEndpoints := make(map[string]common.EndpointInfo)
+	for key, endpoint := range model.GetSupportedEndpointMap() {
+		supportedEndpoints[key] = endpoint
+	}
+	published, err := model.PublishedUpstreamPricing()
+	if err == nil {
+		current := make([]model.Pricing, 0, len(pricing)+len(published))
+		for _, price := range pricing {
+			groups := make([]string, 0, len(price.EnableGroup))
+			for _, key := range price.EnableGroup {
+				if !model.IsUpstreamSaleGroup(key) {
+					groups = append(groups, key)
+				}
+			}
+			if len(groups) > 0 {
+				price.EnableGroup = groups
+				current = append(current, price)
+			}
+		}
+		pricing = append(current, published...)
+		for _, price := range published {
+			if _, allowed := usableGroup[price.SaleGroup]; allowed {
+				groupRatio[price.SaleGroup] = 1
+				for _, kind := range price.SupportedEndpointTypes {
+					if endpoint, exists := common.GetDefaultEndpointInfo(constant.EndpointType(kind)); exists {
+						supportedEndpoints[string(kind)] = endpoint
+					}
+				}
+			}
+		}
+	}
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
 	// check groupRatio contains usableGroup
 	for group := range ratio_setting.GetGroupRatioCopy() {
@@ -70,7 +102,7 @@ func GetPricing(c *gin.Context) {
 		"vendors":            model.GetVendors(),
 		"group_ratio":        groupRatio,
 		"usable_group":       usableGroup,
-		"supported_endpoint": model.GetSupportedEndpointMap(),
+		"supported_endpoint": supportedEndpoints,
 		"auto_groups":        service.GetUserAutoGroup(group),
 		"pricing_version":    "a42d372ccf0b5dd13ecf71203521f9d2",
 	})

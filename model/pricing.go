@@ -16,6 +16,8 @@ import (
 )
 
 type Pricing struct {
+	SaleGroup              string                  `json:"sale_group,omitempty"`
+	SaleGroupName          string                  `json:"sale_group_name,omitempty"`
 	ModelName              string                  `json:"model_name"`
 	Description            string                  `json:"description,omitempty"`
 	Icon                   string                  `json:"icon,omitempty"`

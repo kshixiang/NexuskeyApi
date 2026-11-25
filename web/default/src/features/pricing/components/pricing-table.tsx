@@ -86,7 +86,7 @@ export function PricingTable(props: PricingTableProps) {
 
   const handleRowClick = useCallback(
     (model: PricingModel) => {
-      onModelClick?.(model.model_name)
+      onModelClick?.(model.key ?? model.model_name)
     },
     [onModelClick]
   )

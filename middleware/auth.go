@@ -388,7 +388,7 @@ func TokenAuth() func(c *gin.Context) {
 				return
 			}
 			// check group in common.GroupRatio
-			if !ratio_setting.ContainsGroupRatio(tokenGroup) {
+			if !ratio_setting.ContainsGroupRatio(tokenGroup) && !model.IsUpstreamSaleGroup(tokenGroup) {
 				if tokenGroup != "auto" {
 					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", tokenGroup))
 					return

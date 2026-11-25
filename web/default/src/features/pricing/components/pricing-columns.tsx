@@ -441,6 +441,9 @@ export function usePricingColumns(
       meta: { label: t('Groups') },
       header: t('Groups'),
       cell: ({ row }) => {
+        if (row.original.sale_group_name) {
+          return <GroupBadge group={row.original.sale_group_name} size='sm' />
+        }
         const groups = row.original.enable_groups || []
         if (groups.length === 0) {
           return <span className='text-muted-foreground/50 text-xs'>—</span>

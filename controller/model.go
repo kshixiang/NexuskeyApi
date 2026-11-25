@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -18,6 +19,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -124,14 +126,11 @@ func buildUserOpenAIModels(c *gin.Context) ([]dto.OpenAIModels, error) {
 	}
 
 	modelLimitEnable := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
-	if modelLimitEnable {
-		s, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
-		var tokenModelLimit map[string]bool
-		if ok {
-			tokenModelLimit = s.(map[string]bool)
-		} else {
-			tokenModelLimit = map[string]bool{}
-		}
+	limitValue, _ := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
+	tokenModelLimit, _ := limitValue.(map[string]bool)
+	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+	usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	if modelLimitEnable && tokenGroup != "auto" && !model.IsUpstreamSaleGroup(tokenGroup) && !model.IsUpstreamSaleGroup(usingGroup) {
 		for allowModel := range tokenModelLimit {
 			if !acceptUnsetRatioModel {
 				if !helper.HasModelBillingConfig(allowModel) {
@@ -160,31 +159,57 @@ func buildUserOpenAIModels(c *gin.Context) ([]dto.OpenAIModels, error) {
 		return nil, err
 	}
 	group := userGroup
-	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
 	if tokenGroup != "" {
 		group = tokenGroup
 	}
 	var models []string
-	if tokenGroup == "auto" {
-		for _, autoGroup := range service.GetUserAutoGroup(userGroup) {
-			groupModels := model.GetGroupEnabledModels(autoGroup)
-			for _, g := range groupModels {
-				if !common.StringsContains(models, g) {
-					models = append(models, g)
+	publishedEndpoints := make(map[string][]constant.EndpointType)
+	includeGroup := func(group string) {
+		if model.IsUpstreamSaleGroup(group) {
+			for name, endpoints := range model.PublishedUpstreamGroupModels(group) {
+				for _, endpoint := range endpoints {
+					if !slices.Contains(publishedEndpoints[name], endpoint) {
+						publishedEndpoints[name] = append(publishedEndpoints[name], endpoint)
+					}
+				}
+				if !common.StringsContains(models, name) {
+					models = append(models, name)
 				}
 			}
+			return
+		}
+		for _, name := range model.GetGroupEnabledModels(group) {
+			if !common.StringsContains(models, name) {
+				models = append(models, name)
+			}
+		}
+	}
+	if tokenGroup == "auto" {
+		for _, autoGroup := range service.GetUserAutoGroup(userGroup) {
+			includeGroup(autoGroup)
 		}
 	} else {
-		models = model.GetGroupEnabledModels(group)
+		includeGroup(group)
 	}
 	for _, modelName := range models {
-		if !acceptUnsetRatioModel {
+		if modelLimitEnable && !tokenModelLimit[ratio_setting.FormatMatchingModelName(modelName)] {
+			continue
+		}
+		endpoints, published := publishedEndpoints[modelName]
+		if !published && !acceptUnsetRatioModel {
 			if !helper.HasModelBillingConfig(modelName) {
 				continue
 			}
 		}
+		if !published || group == "auto" {
+			for _, endpoint := range model.GetModelSupportEndpointTypes(modelName) {
+				if !slices.Contains(endpoints, endpoint) {
+					endpoints = append(endpoints, endpoint)
+				}
+			}
+		}
 		if oaiModel, ok := openAIModelsMap[modelName]; ok {
-			oaiModel.SupportedEndpointTypes = model.GetModelSupportEndpointTypes(modelName)
+			oaiModel.SupportedEndpointTypes = endpoints
 			userOpenAiModels = append(userOpenAiModels, oaiModel)
 		} else {
 			userOpenAiModels = append(userOpenAiModels, dto.OpenAIModels{
@@ -192,7 +217,7 @@ func buildUserOpenAIModels(c *gin.Context) ([]dto.OpenAIModels, error) {
 				Object:                 "model",
 				Created:                1626777600,
 				OwnedBy:                "custom",
-				SupportedEndpointTypes: model.GetModelSupportEndpointTypes(modelName),
+				SupportedEndpointTypes: endpoints,
 			})
 		}
 	}

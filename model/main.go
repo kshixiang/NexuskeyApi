@@ -257,6 +257,12 @@ func migrateDB() error {
 
 	err := DB.AutoMigrate(
 		&Channel{},
+		&UpstreamQuoteChannel{},
+		&UpstreamQuoteGroup{},
+		&UpstreamQuoteModel{},
+		&UpstreamQuoteVersion{},
+		&UpstreamSaleVersion{},
+		&UpstreamSaleModel{},
 		&Token{},
 		&User{},
 		&PasskeyCredential{},
@@ -312,6 +318,12 @@ func migrateDBFast() error {
 		name  string
 	}{
 		{&Channel{}, "Channel"},
+		{&UpstreamQuoteChannel{}, "UpstreamQuoteChannel"},
+		{&UpstreamQuoteGroup{}, "UpstreamQuoteGroup"},
+		{&UpstreamQuoteModel{}, "UpstreamQuoteModel"},
+		{&UpstreamQuoteVersion{}, "UpstreamQuoteVersion"},
+		{&UpstreamSaleVersion{}, "UpstreamSaleVersion"},
+		{&UpstreamSaleModel{}, "UpstreamSaleModel"},
 		{&Token{}, "Token"},
 		{&User{}, "User"},
 		{&PasskeyCredential{}, "PasskeyCredential"},

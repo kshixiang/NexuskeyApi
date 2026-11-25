@@ -147,8 +147,8 @@ export function ApiKeysMutateDrawer({
   const groups: ApiKeyGroupOption[] = Object.entries(groupsRaw).map(
     ([key, info]) => ({
       value: key,
-      label: key,
-      desc: info.desc || key,
+      label: key.startsWith('upstream-sale-') ? info.desc || key : key,
+      desc: key.startsWith('upstream-sale-') ? undefined : info.desc || key,
       ratio: info.ratio,
     })
   )

@@ -75,14 +75,14 @@ export function ModelCardGrid(props: ModelCardGridProps) {
       <div className='grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3'>
         {pagedModels.map((model) => (
           <ModelCard
-            key={model.id ?? model.model_name}
+            key={model.key ?? model.id ?? model.model_name}
             model={model}
             tokenUnit={tokenUnit}
             priceRate={props.priceRate}
             usdExchangeRate={props.usdExchangeRate}
             showRechargePrice={props.showRechargePrice}
             perf={perfMap.get(model.model_name || '')}
-            onClick={() => props.onModelClick(model.model_name || '')}
+            onClick={() => props.onModelClick(model.key ?? model.model_name)}
           />
         ))}
       </div>

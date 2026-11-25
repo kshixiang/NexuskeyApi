@@ -120,7 +120,7 @@ func GetAllChannels(c *gin.Context) {
 		}
 		total, _ = model.CountAllTags()
 	} else {
-		baseQuery := model.DB.Model(&model.Channel{})
+		baseQuery := model.ExcludeUpstreamSaleChannels(model.DB.Model(&model.Channel{}))
 		if typeFilter >= 0 {
 			baseQuery = baseQuery.Where("type = ?", typeFilter)
 		}
@@ -144,7 +144,7 @@ func GetAllChannels(c *gin.Context) {
 		clearChannelInfo(datum)
 	}
 
-	countQuery := model.DB.Model(&model.Channel{})
+	countQuery := model.ExcludeUpstreamSaleChannels(model.DB.Model(&model.Channel{}))
 	if statusFilter == common.ChannelStatusEnabled {
 		countQuery = countQuery.Where("status = ?", common.ChannelStatusEnabled)
 	} else if statusFilter == 0 {
@@ -867,6 +867,10 @@ func UpdateChannel(c *gin.Context) {
 			"success": false,
 			"message": err.Error(),
 		})
+		return
+	}
+	if model.IsUpstreamSaleGroup(originChannel.Group) || model.IsUpstreamSaleGroup(channel.Group) {
+		common.ApiErrorMsg(c, "Update this execution channel from Upstream channel quotes")
 		return
 	}
 

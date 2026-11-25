@@ -88,9 +88,8 @@ export function Pricing() {
   const selectedModel = useMemo(
     () =>
       selectedModelName
-        ? (models || []).find(
-            (model) => model.model_name === selectedModelName
-          ) || null
+        ? (models || []).find((model) => model.key === selectedModelName) ||
+          null
         : null,
     [models, selectedModelName]
   )
@@ -203,6 +202,13 @@ export function Pricing() {
 
           <div className='grid gap-4 xl:grid-cols-[330px_minmax(0,1fr)]'>
             <PricingSidebar
+              groupNames={Object.fromEntries(
+                models.flatMap((model) =>
+                  model.sale_group && model.sale_group_name
+                    ? [[model.sale_group, model.sale_group_name]]
+                    : []
+                )
+              )}
               quotaTypeFilter={quotaTypeFilter}
               endpointTypeFilter={endpointTypeFilter}
               vendorFilter={vendorFilter}

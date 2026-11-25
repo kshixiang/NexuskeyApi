@@ -1,0 +1,1149 @@
+import { useState, type FormEvent } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronRight, Download, FileUp, Layers, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+import { api } from '@/lib/api'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+
+const endpoint = '/api/upstream-quotes'
+const channelsKey = ['upstream-quote-channels']
+const groupKey = (id: number) => ['upstream-quote-group', id]
+const dollars = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 10,
+})
+const selectClass =
+  'border-input bg-background h-8 rounded-lg border px-2 text-sm'
+
+type Group = {
+  id: number
+  channel_id: number
+  original_name: string
+  name: string
+  sales_name: string
+  key_hint: string
+  base_url: string
+  protocol: string
+  multiplier: number
+  credit_cost: number
+  revision: number
+  active_version: number
+}
+type Channel = {
+  id: number
+  source: string
+  name: string
+  source_url: string
+  imported_at: number
+  groups: Group[] | null
+}
+type Tier = {
+  name?: string
+  limit?: number
+  operator?: string
+  window?: unknown
+  input?: number | null
+  output?: number | null
+  cache_read?: number
+  cache_write?: number
+  cache_write_1h?: number
+}
+type Quote = {
+  model_id: string
+  local_model?: string
+  unit: string
+  kind: string
+  fixed_price?: number
+  tiers?: Tier[]
+  media?: { spec: string; meter: string; price?: number | null }[]
+  reference?: unknown
+}
+type Preview = {
+  quote: Quote
+  quote_version: number
+  last_seen_import: number
+  sale?: { expression: string; fixed: boolean; fixed_price: number }
+  error?: string
+}
+type GroupDetail = Group & {
+  quotes: Preview[]
+  versions: { id: number; created_at: number; multiplier: number }[] | null
+}
+type Change = {
+  group: string
+  model: string
+  status: string
+  previous?: Quote
+  incoming?: Quote
+}
+type Comparison = {
+  channel: string
+  group: string
+  cost: number
+  sale: number
+  margin?: number
+  tier: string
+  components?: Record<string, number>
+  error?: string
+  estimated: boolean
+}
+type Envelope<T> = { success: boolean; message: string; data: T }
+
+async function request<T>(
+  method: 'get' | 'post' | 'put',
+  path: string,
+  data?: unknown
+) {
+  const response = await api.request<Envelope<T>>({
+    method,
+    url: endpoint + path,
+    data,
+  })
+  if (!response.data.success) throw new Error(response.data.message)
+  return response.data.data
+}
+
+export function UpstreamQuotes() {
+  const { t } = useTranslation()
+  const [selected, setSelected] = useState(0)
+  const [importMode, setImportMode] = useState<Channel | 'new' | null>(null)
+  const list = useQuery({
+    queryKey: channelsKey,
+    queryFn: () => request<Channel[]>('get', ''),
+  })
+  const channels = list.data ?? []
+  const active = channels.find((channel) =>
+    channel.groups?.some((group) => group.id === selected)
+  )
+  const group = useQuery({
+    queryKey: groupKey(selected),
+    queryFn: () => request<GroupDetail>('get', '/groups/' + selected),
+    enabled: selected > 0,
+  })
+  return (
+    <div className='space-y-6'>
+      <div className='grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]'>
+        <aside className='space-y-3 rounded-xl border p-3'>
+          <Button
+            className='w-full justify-start'
+            onClick={() => setImportMode('new')}
+          >
+            <Plus /> {t('Import upstream quotes')}
+          </Button>
+          {list.isLoading && (
+            <p className='text-muted-foreground px-2 text-sm'>
+              {t('Loading...')}
+            </p>
+          )}
+          {list.isError && (
+            <p className='text-destructive px-2 text-sm'>
+              {t('Unable to load upstream quotes')}
+            </p>
+          )}
+          {channels.map((channel) => (
+            <div key={channel.id} className='space-y-1 border-t pt-2'>
+              <div className='flex items-center gap-2 px-2 py-1'>
+                <Layers className='size-4 shrink-0' />
+                <span className='min-w-0 flex-1 truncate text-sm font-semibold'>
+                  {channel.name}
+                </span>
+                <span className='text-muted-foreground font-mono text-xs'>
+                  #{channel.id}
+                </span>
+              </div>
+              {channel.groups?.map((item) => (
+                <Button
+                  key={item.id}
+                  variant={
+                    selected === item.id && !importMode ? 'secondary' : 'ghost'
+                  }
+                  className='w-full justify-start'
+                  title={item.name}
+                  onClick={() => {
+                    setSelected(item.id)
+                    setImportMode(null)
+                  }}
+                >
+                  <ChevronRight className='size-3 shrink-0' />
+                  <span className='truncate'>{item.name}</span>
+                  {item.active_version > 0 && (
+                    <span className='ml-auto size-2 shrink-0 rounded-full bg-emerald-500' />
+                  )}
+                </Button>
+              ))}
+            </div>
+          ))}
+        </aside>
+        <section className='min-w-0 space-y-4'>
+          {importMode ? (
+            <ImportQuotes
+              key={importMode === 'new' ? 'new' : importMode.id}
+              channel={importMode === 'new' ? undefined : importMode}
+              onClose={() => setImportMode(null)}
+            />
+          ) : active && group.data ? (
+            <>
+              <ChannelSettings
+                key={active.id + active.name}
+                channel={active}
+                onImport={() => setImportMode(active)}
+              />
+              <GroupSettings
+                key={group.data.id + ':' + group.data.revision}
+                group={group.data}
+                importedAt={active.imported_at}
+              />
+            </>
+          ) : (
+            <p className='text-muted-foreground rounded-xl border p-6 text-sm'>
+              {group.isError
+                ? t('Unable to load upstream quotes')
+                : group.isLoading && selected
+                  ? t('Loading...')
+                  : t('Select a channel group to configure and publish')}
+            </p>
+          )}
+        </section>
+      </div>
+      <QuoteComparison />
+    </div>
+  )
+}
+
+function ChannelSettings({
+  channel,
+  onImport,
+}: {
+  channel: Channel
+  onImport: () => void
+}) {
+  const { t } = useTranslation()
+  const client = useQueryClient()
+  const [name, setName] = useState(channel.name)
+  const rename = useMutation({
+    mutationFn: () => request('put', '/channels/' + channel.id, { name }),
+    onSuccess: () => client.invalidateQueries({ queryKey: channelsKey }),
+  })
+  return (
+    <form
+      className='flex flex-wrap items-end gap-2 rounded-xl border p-4'
+      onSubmit={(event) => {
+        event.preventDefault()
+        rename.mutate()
+      }}
+    >
+      <div className='min-w-40 flex-1 space-y-1'>
+        <Label htmlFor='upstream-name'>
+          {t('Channel Name')} #{channel.id}
+        </Label>
+        <Input
+          id='upstream-name'
+          required
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </div>
+      <Button
+        type='submit'
+        variant='outline'
+        disabled={rename.isPending || name === channel.name}
+      >
+        {t('Save')}
+      </Button>
+      <Button type='button' variant='outline' onClick={onImport}>
+        {t('Reimport quotes')}
+      </Button>
+      <a
+        className='text-primary self-center px-2 text-sm underline'
+        href={channel.source_url}
+        target='_blank'
+        rel='noreferrer'
+      >
+        {t('Source')}
+      </a>
+    </form>
+  )
+}
+
+const exampleSnapshot = {
+  groups: [
+    {
+      source_id: 'example-group',
+      name: 'Example group',
+      quotes: [
+        {
+          model_id: 'example-model',
+          kind: 'token',
+          unit: 'usd',
+          confirmed: false,
+          usage_verified: false,
+          endpoints: ['openai'],
+          tiers: [
+            { name: 'base', input: 0.05, output: 0.2, cache_read: 0.001 },
+          ],
+        },
+      ],
+    },
+  ],
+}
+
+const changeLabels: Record<string, string> = {
+  new: 'New',
+  changed: 'Quote changed',
+  unchanged: 'Unchanged',
+  needs_confirmation: 'Needs confirmation',
+  not_seen: 'Missing from this import',
+}
+
+function ImportQuotes({
+  channel,
+  onClose,
+}: {
+  channel?: Channel
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const client = useQueryClient()
+  const [source, setSource] = useState(channel?.source ?? 'kedaya')
+  const [raw, setRaw] = useState('')
+  const [prepared, setPrepared] = useState<{
+    input: unknown
+    changes: Change[]
+  }>()
+  const [error, setError] = useState('')
+  const load = useMutation({
+    mutationFn: () => request<{ groups: unknown }>('get', '/source/' + source),
+    onSuccess: (snapshot) => setSnapshot(JSON.stringify(snapshot, null, 2)),
+  })
+  const preview = useMutation({
+    mutationFn: async () => {
+      const snapshot = JSON.parse(raw)
+      if (snapshot.source && snapshot.source !== source)
+        throw new Error(t('Snapshot source does not match'))
+      const input = {
+        source,
+        channel_id: channel?.id,
+        ...(snapshot.data && typeof snapshot.code === 'number'
+          ? { snapshot: raw }
+          : { groups: snapshot.groups ?? snapshot }),
+      }
+      const changes = await request<Change[] | null>(
+        'post',
+        '/import/preview',
+        input
+      )
+      return { input, changes: changes ?? [] }
+    },
+    onSuccess: (data) => {
+      setPrepared(data)
+      setError('')
+    },
+    onError: (cause) => {
+      setPrepared(undefined)
+      setError(cause.message)
+    },
+  })
+  const save = useMutation({
+    mutationFn: () => request('post', '/import/save', prepared?.input),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: channelsKey })
+      await client.invalidateQueries({ queryKey: ['upstream-quote-group'] })
+      onClose()
+    },
+  })
+  function setSnapshot(value: string) {
+    setRaw(value)
+    setPrepared(undefined)
+    setError('')
+  }
+  return (
+    <div className='space-y-3 rounded-xl border p-4'>
+      <h2 className='font-semibold'>
+        {channel ? t('Reimport quotes') : t('Import upstream quotes')}
+      </h2>
+      <div className='flex flex-wrap items-center gap-2'>
+        <Label htmlFor='upstream-source'>{t('Source')}</Label>
+        <select
+          id='upstream-source'
+          className={selectClass}
+          value={source}
+          disabled={
+            !!channel || load.isPending || preview.isPending || save.isPending
+          }
+          onChange={(event) => {
+            setSource(event.target.value)
+            setPrepared(undefined)
+          }}
+        >
+          <option value='kedaya'>Kedaya</option>
+          <option value='string'>String AI</option>
+        </select>
+        <Button
+          type='button'
+          variant='outline'
+          disabled={load.isPending || preview.isPending || save.isPending}
+          onClick={() => load.mutate()}
+        >
+          <Download /> {t('Fetch latest quotes')}
+        </Button>
+        <label className='hover:bg-accent inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-xs'>
+          <FileUp className='size-4' /> {t('Upload JSON')}
+          <input
+            type='file'
+            accept='.json,application/json'
+            className='sr-only'
+            disabled={preview.isPending || save.isPending}
+            onChange={async (event) => {
+              const file = event.currentTarget.files?.[0]
+              if (file) setSnapshot(await file.text())
+            }}
+          />
+        </label>
+        <Button
+          type='button'
+          variant='ghost'
+          onClick={() => setSnapshot(JSON.stringify(exampleSnapshot, null, 2))}
+          disabled={preview.isPending || save.isPending}
+        >
+          <Download /> {t('Load JSON example')}
+        </Button>
+      </div>
+      <Label htmlFor='upstream-snapshot'>{t('Quote snapshot')}</Label>
+      <Textarea
+        id='upstream-snapshot'
+        className='min-h-40 font-mono text-xs'
+        value={raw}
+        onChange={(event) => setSnapshot(event.target.value)}
+        disabled={preview.isPending || save.isPending}
+      />
+      {error && (
+        <p role='alert' className='text-destructive text-sm'>
+          {error}
+        </p>
+      )}
+      {prepared && (
+        <div className='max-h-72 overflow-auto rounded-lg border'>
+          <table className='w-full text-left text-sm'>
+            <thead className='bg-muted'>
+              <tr>
+                <th className='p-2'>{t('Group')}</th>
+                <th className='p-2'>{t('Model')}</th>
+                <th className='p-2'>{t('Status')}</th>
+                <th className='p-2'>{t('Quote snapshot')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prepared.changes.map((change) => (
+                <tr
+                  className='border-t'
+                  key={change.group + ':' + change.model}
+                >
+                  <td className='p-2'>{change.group}</td>
+                  <td className='p-2 font-mono text-xs'>{change.model}</td>
+                  <td className='p-2'>
+                    {t(changeLabels[change.status] ?? change.status)}
+                  </td>
+                  <td className='p-2'>
+                    <details>
+                      <summary className='cursor-pointer'>
+                        {t('Details')}
+                      </summary>
+                      <pre className='max-w-sm overflow-auto text-xs'>
+                        {JSON.stringify(
+                          { before: change.previous, after: change.incoming },
+                          null,
+                          2
+                        )}
+                      </pre>
+                    </details>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className='flex flex-wrap gap-2'>
+        <Button
+          type='button'
+          variant='outline'
+          onClick={onClose}
+          disabled={save.isPending}
+        >
+          {t('Cancel')}
+        </Button>
+        <Button
+          type='button'
+          variant='outline'
+          disabled={
+            !raw.trim() || load.isPending || preview.isPending || save.isPending
+          }
+          onClick={() => preview.mutate()}
+        >
+          {t('Preview')}
+        </Button>
+        <Button
+          type='button'
+          disabled={!prepared || load.isPending || save.isPending}
+          onClick={() => save.mutate()}
+        >
+          {t('Save import')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function GroupSettings({
+  group,
+  importedAt,
+}: {
+  group: GroupDetail
+  importedAt: number
+}) {
+  const { t } = useTranslation()
+  const client = useQueryClient()
+  const [name, setName] = useState(group.name)
+  const [sales, setSales] = useState(group.sales_name)
+  const [key, setKey] = useState('')
+  const [base, setBase] = useState(group.base_url)
+  const [protocol, setProtocol] = useState(group.protocol)
+  const [mark, setMark] = useState(String(group.multiplier))
+  const [credit, setCredit] = useState(String(group.credit_cost))
+  const [historic, setHistoric] = useState(0)
+  const [editingQuote, setEditingQuote] = useState<Quote>()
+  const draft = {
+    name,
+    sales_name: sales,
+    api_key: key || undefined,
+    base_url: base,
+    protocol,
+    multiplier: Number(mark),
+    credit_cost: Number(credit),
+    revision: group.revision,
+  }
+  const dirty =
+    name !== group.name ||
+    sales !== group.sales_name ||
+    key !== '' ||
+    base !== group.base_url ||
+    protocol !== group.protocol ||
+    Number(mark) !== group.multiplier ||
+    Number(credit) !== group.credit_cost
+  async function refresh() {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: groupKey(group.id) }),
+      client.invalidateQueries({ queryKey: channelsKey }),
+      client.invalidateQueries({ queryKey: ['pricing'] }),
+      client.invalidateQueries({ queryKey: ['user-groups'] }),
+    ])
+  }
+  const save = useMutation({
+    mutationFn: () => request('put', '/groups/' + group.id, draft),
+    onSuccess: refresh,
+    onError: (error) => {
+      if ('response' in error) void refresh()
+    },
+  })
+  const listing = useMutation({
+    mutationFn: (publish: boolean) =>
+      request('post', '/groups/' + group.id + '/listing', {
+        revision: group.revision,
+        publish,
+        restore_version: historic || undefined,
+      }),
+    onSuccess: refresh,
+    onError: (error) => {
+      if ('response' in error) void refresh()
+    },
+  })
+  const ratio = Number(mark)
+  const margin = ratio > 0 ? ((1 - 1 / ratio) * 100).toFixed(2) + '%' : '—'
+  const busy = save.isPending || listing.isPending
+  const state =
+    group.active_version > 0
+      ? 'Published'
+      : group.key_hint && group.base_url
+        ? 'Ready to publish'
+        : 'Needs configuration'
+  return (
+    <div className='space-y-4 rounded-xl border p-4'>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <div>
+          <h2 className='text-lg font-semibold'>{group.name}</h2>
+          <p className='text-muted-foreground text-sm'>
+            {t('Original group name')} · {group.original_name}
+          </p>
+        </div>
+        <Badge variant='outline'>
+          {t(state)}
+          {group.active_version > 0 && ' · #' + group.active_version}
+        </Badge>
+      </div>
+      <form
+        id='upstream-group-form'
+        className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3'
+        onSubmit={(event) => {
+          event.preventDefault()
+          save.mutate()
+        }}
+      >
+        <QuoteField
+          label={t('Channel group name')}
+          id='quote-group-name'
+          value={name}
+          onChange={setName}
+          required
+        />
+        <QuoteField
+          label={t('Sales group name')}
+          id='quote-sales-name'
+          value={sales}
+          onChange={setSales}
+          required
+        />
+        <QuoteField
+          label={t('Upstream API Key')}
+          id='quote-key'
+          value={key}
+          onChange={setKey}
+          type='password'
+          placeholder={group.key_hint || undefined}
+        />
+        <QuoteField
+          label={t('Upstream API base URL')}
+          id='quote-base'
+          value={base}
+          onChange={setBase}
+          type='url'
+        />
+        <div className='space-y-1'>
+          <Label htmlFor='quote-protocol'>{t('API protocol')}</Label>
+          <select
+            id='quote-protocol'
+            className={selectClass + ' w-full'}
+            value={protocol}
+            onChange={(event) => setProtocol(event.target.value)}
+          >
+            <option value='openai'>OpenAI</option>
+            <option value='anthropic'>Anthropic</option>
+          </select>
+        </div>
+        <QuoteField
+          label={t('Sales multiplier')}
+          id='quote-markup'
+          value={mark}
+          onChange={setMark}
+          type='number'
+          min='0.000000001'
+          required
+        />
+        <QuoteField
+          label={t('USD cost per credit')}
+          id='quote-credit'
+          value={credit}
+          onChange={setCredit}
+          type='number'
+          min='0'
+        />
+        <div className='space-y-1'>
+          <span className='text-muted-foreground text-xs'>
+            {t('Estimated gross margin')}
+          </span>
+          <p className='font-mono text-sm'>{margin}</p>
+        </div>
+        <div className='flex items-end'>
+          <Button disabled={!dirty || busy} type='submit'>
+            {t('Save group settings')}
+          </Button>
+        </div>
+      </form>
+      <div className='overflow-x-auto rounded-lg border'>
+        <table className='w-full min-w-150 text-left text-sm'>
+          <thead className='bg-muted'>
+            <tr>
+              <th scope='col' className='p-2'>
+                {t('Model')}
+              </th>
+              <th scope='col' className='p-2'>
+                {t('Upstream cost')}
+              </th>
+              <th scope='col' className='p-2'>
+                {t('Sale price')}
+              </th>
+              <th scope='col' className='p-2'>
+                {t('Status')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {group.quotes.map((item) => (
+              <tr key={item.quote.model_id} className='border-t align-top'>
+                <th scope='row' className='p-2 text-left text-xs font-medium'>
+                  <div className='font-mono'>
+                    {item.quote.local_model || item.quote.model_id}
+                  </div>
+                  <span className='text-muted-foreground'>
+                    #{item.quote_version}
+                  </span>
+                </th>
+                <td className='p-2'>
+                  <QuoteRates quote={item.quote} factor={1} />
+                </td>
+                <td className='p-2'>
+                  {item.sale && (
+                    <QuoteRates
+                      quote={item.quote}
+                      factor={
+                        ratio *
+                        (item.quote.unit === 'credit' ? Number(credit) : 1)
+                      }
+                      usd
+                    />
+                  )}
+                </td>
+                <td className='p-2 text-xs'>
+                  {item.sale ? t('Eligible for listing') : item.error}
+                  <Button
+                    type='button'
+                    size='xs'
+                    variant='ghost'
+                    onClick={() => setEditingQuote(item.quote)}
+                  >
+                    {t('Edit quote')}
+                  </Button>
+                  {item.last_seen_import < importedAt && (
+                    <p className='text-muted-foreground mt-1'>
+                      {t('Missing from this import')}
+                    </p>
+                  )}
+                  {item.quote.reference != null && (
+                    <details>
+                      <summary>{t('Source')}</summary>
+                      <pre className='max-w-56 overflow-auto'>
+                        {JSON.stringify(item.quote.reference, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {editingQuote && (
+        <QuoteEditor
+          key={editingQuote.model_id}
+          group={group}
+          quote={editingQuote}
+          onClose={() => setEditingQuote(undefined)}
+          onSaved={refresh}
+        />
+      )}
+      <div className='flex flex-wrap items-center gap-2'>
+        {!!group.versions?.length && (
+          <select
+            aria-label={t('Listing version')}
+            className={selectClass}
+            value={historic}
+            onChange={(event) => setHistoric(Number(event.target.value))}
+          >
+            <option value={0}>{t('Latest draft')}</option>
+            {group.versions.map((version) => (
+              <option key={version.id} value={version.id}>
+                #{version.id} ·{' '}
+                {new Date(version.created_at * 1000).toLocaleString()} ·{' '}
+                {version.multiplier}×
+              </option>
+            ))}
+          </select>
+        )}
+        <Button
+          disabled={
+            busy ||
+            dirty ||
+            !group.key_hint ||
+            !group.base_url ||
+            (!historic && !group.quotes.some((item) => item.sale))
+          }
+          onClick={() => listing.mutate(true)}
+        >
+          {historic
+            ? t('Publish historical version')
+            : group.active_version
+              ? t('Update published group')
+              : t('Publish group')}
+        </Button>
+        {group.active_version > 0 && (
+          <Button
+            variant='outline'
+            disabled={busy}
+            onClick={() => listing.mutate(false)}
+          >
+            {t('Unpublish group')}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function QuoteEditor({
+  group,
+  quote,
+  onClose,
+  onSaved,
+}: {
+  group: GroupDetail
+  quote: Quote
+  onClose: () => void
+  onSaved: () => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const [raw, setRaw] = useState(() =>
+    JSON.stringify({ ...quote, reference: undefined }, null, 2)
+  )
+  const [error, setError] = useState('')
+  const save = useMutation({
+    mutationFn: async () =>
+      request('put', '/groups/' + group.id + '/quote', {
+        revision: group.revision,
+        quote: { ...JSON.parse(raw), model_id: quote.model_id },
+      }),
+    onSuccess: async () => {
+      await onSaved()
+      onClose()
+    },
+    onError: (cause) => setError(cause.message),
+  })
+  return (
+    <div className='space-y-2 rounded-lg border p-3'>
+      <Label htmlFor='upstream-quote-editor'>
+        {t('Edit quote')} · {quote.model_id}
+      </Label>
+      <p className='text-muted-foreground text-sm'>
+        {t(
+          'Set confirmed and usage_verified after checking the cost and API usage.'
+        )}
+      </p>
+      <Textarea
+        id='upstream-quote-editor'
+        className='min-h-40 font-mono text-xs'
+        value={raw}
+        onChange={(event) => setRaw(event.target.value)}
+      />
+      {error && (
+        <p role='alert' className='text-destructive text-sm'>
+          {error}
+        </p>
+      )}
+      <div className='flex gap-2'>
+        <Button
+          size='sm'
+          disabled={save.isPending}
+          onClick={() => save.mutate()}
+        >
+          {t('Save quote')}
+        </Button>
+        <Button
+          size='sm'
+          variant='outline'
+          disabled={save.isPending}
+          onClick={onClose}
+        >
+          {t('Cancel')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function QuoteField({
+  label,
+  onChange,
+  ...props
+}: {
+  id: string
+  label: string
+  value: string
+  onChange: (value: string) => void
+  type?: string
+  min?: string
+  required?: boolean
+  placeholder?: string
+}) {
+  return (
+    <div className='space-y-1'>
+      <Label htmlFor={props.id}>{label}</Label>
+      <Input
+        {...props}
+        step={props.type === 'number' ? 'any' : undefined}
+        autoComplete={props.type === 'password' ? 'new-password' : undefined}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </div>
+  )
+}
+
+function QuoteRates({
+  quote,
+  factor,
+  usd,
+}: {
+  quote: Quote
+  factor: number
+  usd?: boolean
+}) {
+  const { t } = useTranslation()
+  const currency = usd || quote.unit === 'usd'
+  const amount = (value?: number | null) =>
+    value == null
+      ? '—'
+      : currency
+        ? dollars.format(value * factor)
+        : (value * factor).toLocaleString()
+  if (quote.kind === 'fixed')
+    return (
+      <span className='font-mono'>
+        {amount(quote.fixed_price)} / {t('Request')}
+      </span>
+    )
+  if (quote.kind !== 'token')
+    return (
+      <div className='space-y-1 font-mono text-xs'>
+        {quote.media?.map((rate, index) => (
+          <div key={index}>
+            {rate.spec} · {amount(rate.price)} / {rate.meter}
+          </div>
+        ))}
+        {!quote.media?.length && <span>—</span>}
+      </div>
+    )
+  return (
+    <div className='space-y-1 font-mono text-xs'>
+      {quote.tiers?.map((tier, index) => (
+        <div key={index} className='space-y-0.5'>
+          <div className='text-muted-foreground'>
+            {tier.name}
+            {tier.limit != null &&
+              ' · ' + tier.operator + ' ' + tier.limit} ·{' '}
+            {currency ? 'USD' : t('Credits')} / 1M
+          </div>
+          <div>
+            {t('Input')} {amount(tier.input)} · {t('Output')}{' '}
+            {amount(tier.output)}
+          </div>
+          {tier.cache_read != null && (
+            <div>
+              {t('Cache Read')} {amount(tier.cache_read)}
+            </div>
+          )}
+          {tier.cache_write != null && (
+            <div>
+              {t('Cache Write')} {amount(tier.cache_write)}
+            </div>
+          )}
+          {tier.cache_write_1h != null && (
+            <div>
+              {t('Cache Write')} (1h) {amount(tier.cache_write_1h)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const usageFields = [
+  ['P', 'Input', '100000'],
+  ['C', 'Output', '10000'],
+  ['CR', 'Cache Read', '0'],
+  ['CC', 'Cache Write', '0'],
+  ['CC1h', 'One-hour cache write', '0'],
+] as const
+
+function QuoteComparison() {
+  const { t } = useTranslation()
+  const comparison = useMutation({
+    mutationFn: (payload: unknown) =>
+      request<Comparison[]>('post', '/compare', payload),
+    onError: (error) => {
+      if (!('response' in error)) toast.error(error.message)
+    },
+  })
+  function compare(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const at = String(form.get('at') ?? '')
+    comparison.mutate({
+      model: String(form.get('model')).trim(),
+      usage: Object.fromEntries(
+        usageFields.map(([key]) => [key, Number(form.get(key))])
+      ),
+      at: at ? new Date(at).toISOString() : undefined,
+      sale: form.get('sale') === '' ? undefined : Number(form.get('sale')),
+      published: form.get('published') === 'published',
+      unit: String(form.get('meter') ?? ''),
+      spec: String(form.get('spec') ?? '').trim(),
+      quantity: Number(form.get('quantity')),
+    })
+  }
+  return (
+    <section className='space-y-3 rounded-xl border p-4'>
+      <h2 className='font-semibold'>{t('Compare upstream quotes')}</h2>
+      <form
+        className='grid gap-2 sm:grid-cols-3 lg:grid-cols-5'
+        onSubmit={compare}
+      >
+        <label className='space-y-1 text-sm'>
+          {t('Model ID')}
+          <Input name='model' required placeholder='gpt-6.2-sol' />
+        </label>
+        {usageFields.map(([key, label, value]) => (
+          <label key={key} className='space-y-1 text-sm'>
+            {t(label)}
+            <Input name={key} type='number' min={0} defaultValue={value} />
+          </label>
+        ))}
+        <label className='space-y-1 text-sm'>
+          {t('Request time')}
+          <Input name='at' type='datetime-local' />
+        </label>
+        <label className='space-y-1 text-sm'>
+          {t('Trial sale total (USD)')}
+          <Input name='sale' type='number' min={0} step='any' />
+        </label>
+        <label className='space-y-1 text-sm'>
+          {t('Listing version')}
+          <select name='published' className={selectClass + ' w-full'}>
+            <option value='draft'>{t('Latest draft')}</option>
+            <option value='published'>{t('Published')}</option>
+          </select>
+        </label>
+        <label className='space-y-1 text-sm'>
+          {t('Specification')}
+          <Input name='spec' />
+        </label>
+        <label className='space-y-1 text-sm'>
+          {t('Usage unit')}
+          <select name='meter' className={selectClass + ' w-full'}>
+            <option value=''>{t('Token')}</option>
+            <option value='per_image'>{t('Per image')}</option>
+            <option value='per_request'>{t('Per request')}</option>
+            <option value='per_second'>{t('Per second')}</option>
+            <option value='reference_per_second'>
+              {t('Reference video seconds')}
+            </option>
+          </select>
+        </label>
+        <label className='space-y-1 text-sm'>
+          {t('Quantity')}
+          <Input
+            name='quantity'
+            type='number'
+            min={0}
+            step='any'
+            defaultValue={1}
+          />
+        </label>
+        <div className='flex items-end'>
+          <Button type='submit' disabled={comparison.isPending}>
+            {t('Compare')}
+          </Button>
+        </div>
+      </form>
+      {comparison.data && (
+        <div className='overflow-x-auto'>
+          <table className='w-full text-left text-sm'>
+            <thead className='bg-muted'>
+              <tr>
+                {[
+                  'Channel',
+                  'Group',
+                  'Pricing tier',
+                  'Upstream cost',
+                  'Sale price',
+                  'Estimated gross margin',
+                ].map((label) => (
+                  <th key={label} className='p-2'>
+                    {t(label)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {comparison.data.map((row, index) => (
+                <tr key={index} className='border-t'>
+                  <td className='p-2'>{row.channel}</td>
+                  <td className='p-2'>{row.group}</td>
+                  <td className='p-2'>
+                    {row.tier || '—'}
+                    {row.estimated && (
+                      <span className='text-muted-foreground block text-xs'>
+                        {t('Catalog estimate')}
+                      </span>
+                    )}
+                  </td>
+                  {row.error ? (
+                    <td colSpan={3} className='text-muted-foreground p-2'>
+                      {row.error}
+                    </td>
+                  ) : (
+                    <>
+                      <td className='p-2 font-mono'>
+                        {row.components ? (
+                          <details>
+                            <summary>{dollars.format(row.cost)}</summary>
+                            {Object.entries(row.components).map(
+                              ([metric, value]) => (
+                                <div key={metric} className='text-xs'>
+                                  {t(
+                                    (
+                                      {
+                                        input: 'Input',
+                                        output: 'Output',
+                                        cache_read: 'Cache Read',
+                                        cache_write: 'Cache Write',
+                                        cache_write_1h: 'One-hour cache write',
+                                      } as Record<string, string>
+                                    )[metric] ?? metric
+                                  )}{' '}
+                                  {dollars.format(value)}
+                                </div>
+                              )
+                            )}
+                          </details>
+                        ) : (
+                          dollars.format(row.cost)
+                        )}
+                      </td>
+                      <td className='p-2 font-mono'>
+                        {dollars.format(row.sale)}
+                      </td>
+                      <td className='p-2 font-mono'>
+                        {row.margin == null
+                          ? '—'
+                          : (100 * row.margin).toFixed(2) + '%'}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!comparison.data.length && (
+            <p className='text-muted-foreground p-2 text-sm'>
+              {t('No matching upstream quotes')}
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
