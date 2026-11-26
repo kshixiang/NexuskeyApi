@@ -33,6 +33,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { FieldGroup, FieldLegend, FieldSet } from '@/components/ui/field'
 import {
   Form,
@@ -44,15 +51,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+import { SheetContent } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { DateTimePicker } from '@/components/datetime-picker'
@@ -68,6 +67,7 @@ import {
 } from '../lib'
 import { type ApiKey } from '../types'
 import { ApiKeyCategorySelect } from './api-key-category-select'
+import { ApiKeyGroupCards } from './api-key-group-cards'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
@@ -75,21 +75,20 @@ import {
 import { ApiKeyGroupModelsPanel } from './api-key-group-models-panel'
 import { useApiKeys } from './api-keys-provider'
 
-type ApiKeyMutateDrawerProps = {
+type ApiKeysMutateFormProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentRow?: ApiKey
-  side?: 'left' | 'right'
 }
 
-export function ApiKeysMutateDrawer({
+export function ApiKeysMutateForm({
   open,
   onOpenChange,
   currentRow,
-  side = 'right',
-}: ApiKeyMutateDrawerProps) {
+}: ApiKeysMutateFormProps) {
   const { t } = useTranslation()
   const isUpdate = !!currentRow
+  const Content = isUpdate ? SheetContent : DialogContent
   const { triggerRefresh } = useApiKeys()
   const { status } = useStatus()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -104,14 +103,14 @@ export function ApiKeysMutateDrawer({
   })
 
   // Fetch groups
-  const { data: groupsData } = useQuery({
+  const { data: groupsData, isPending: groupsPending } = useQuery({
     queryKey: ['user-groups'],
     queryFn: getUserGroups,
     staleTime: 5 * 60 * 1000,
   })
 
   const models = modelsData?.data || []
-  const groupsRaw = groupsData?.data || {}
+  const groupsRaw = groupsData?.success ? groupsData.data || {} : {}
   const groups: ApiKeyGroupOption[] = Object.entries(groupsRaw).map(
     ([key, info]) => ({
       value: key,
@@ -121,8 +120,11 @@ export function ApiKeysMutateDrawer({
     })
   )
 
-  // Add auto group if configured
-  if (!groups.some((g) => g.value === 'auto')) {
+  // Keep the automatic option available once the group list has loaded.
+  if (
+    (isUpdate || groupsData?.success) &&
+    !groups.some((g) => g.value === 'auto')
+  ) {
     groups.unshift({
       value: 'auto',
       label: 'auto',
@@ -152,6 +154,11 @@ export function ApiKeysMutateDrawer({
   }, [open, isUpdate, currentRow, form, defaultUseAutoGroup])
 
   const onSubmit = async (data: ApiKeyFormValues) => {
+    if (!isUpdate && !groups.some((group) => group.value === data.group)) {
+      form.setError('group', { message: t('Group is required') })
+      return
+    }
+
     setIsSubmitting(true)
     try {
       const basePayload = transformFormDataToPayload(data)
@@ -228,10 +235,11 @@ export function ApiKeysMutateDrawer({
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroup = form.watch('group')
+  const hasSelectedGroup = groups.some((group) => group.value === selectedGroup)
   const unlimitedQuota = form.watch('unlimited_quota')
 
   return (
-    <Sheet
+    <Dialog
       open={open}
       onOpenChange={(v) => {
         onOpenChange(v)
@@ -240,22 +248,24 @@ export function ApiKeysMutateDrawer({
         }
       }}
     >
-      <SheetContent
-        side={side}
-        className='bg-background flex !h-dvh !w-screen max-w-none gap-0 overflow-hidden p-0 sm:!w-full sm:!max-w-[680px]'
+      <Content
+        className={cn(
+          'bg-background flex flex-col gap-0 overflow-hidden p-0',
+          isUpdate
+            ? '!h-dvh !w-screen max-w-none sm:!w-full sm:!max-w-[680px]'
+            : 'max-h-[calc(100dvh-2rem)] sm:max-w-[680px]'
+        )}
       >
-        <SheetHeader className='bg-background border-b px-4 py-3 text-start sm:px-5 sm:py-4'>
-          <SheetTitle className='text-base sm:text-lg'>
+        <header className='bg-background flex shrink-0 flex-col gap-0.5 border-b py-3 ps-4 pe-12 text-start sm:py-4 sm:ps-5'>
+          <DialogTitle className='text-base font-semibold sm:text-lg'>
             {isUpdate ? t('Update API Key') : t('Create API Key')}
-          </SheetTitle>
-          <SheetDescription className='pr-6 text-xs sm:text-sm'>
+          </DialogTitle>
+          <DialogDescription className='text-xs sm:text-sm'>
             {isUpdate
               ? t('Update the API key by providing necessary info.')
-              : t(
-                  'Set a name and choose a category and group for your API key.'
-                )}
-          </SheetDescription>
-        </SheetHeader>
+              : t('Select a group')}
+          </DialogDescription>
+        </header>
         <Form {...form}>
           <form
             id='api-key-form'
@@ -287,40 +297,65 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name='category'
-                render={({ field }) => (
-                  <FieldSet>
-                    <FieldLegend variant='label'>{t('Category')}</FieldLegend>
-                    <ApiKeyCategorySelect
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    />
-                  </FieldSet>
-                )}
-              />
+              {isUpdate && (
+                <FormField
+                  control={form.control}
+                  name='category'
+                  render={({ field }) => (
+                    <FieldSet>
+                      <FieldLegend variant='label'>{t('Category')}</FieldLegend>
+                      <ApiKeyCategorySelect
+                        value={field.value}
+                        onValueChange={field.onChange}
+                      />
+                    </FieldSet>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
                 name='group'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Group')}</FormLabel>
-                    <FormControl>
-                      <ApiKeyGroupCombobox
-                        options={groups}
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        placeholder={t('Select a group')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field, fieldState }) =>
+                  isUpdate ? (
+                    <FormItem>
+                      <FormLabel>{t('Group')}</FormLabel>
+                      <FormControl>
+                        <ApiKeyGroupCombobox
+                          options={groups}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          placeholder={t('Select a group')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  ) : (
+                    <FormItem>
+                      <FieldSet
+                        data-invalid={fieldState.invalid}
+                        className='gap-0'
+                      >
+                        <FieldLegend variant='label'>
+                          {t('Group')}{' '}
+                          <span aria-hidden className='text-destructive'>
+                            *
+                          </span>
+                        </FieldLegend>
+                        <ApiKeyGroupCards
+                          options={groups}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          isLoading={groupsPending}
+                        />
+                      </FieldSet>
+                      <FormMessage />
+                    </FormItem>
+                  )
+                }
               />
 
-              {selectedGroup === 'auto' && (
+              {selectedGroup === 'auto' && (isUpdate || hasSelectedGroup) && (
                 <FormField
                   control={form.control}
                   name='cross_group_retry'
@@ -585,23 +620,23 @@ export function ApiKeysMutateDrawer({
             </Collapsible>
           </form>
         </Form>
-        <SheetFooter className='bg-background grid grid-cols-2 gap-2 border-t px-3 py-3 sm:flex sm:flex-row sm:justify-end sm:px-5 sm:py-4'>
-          <SheetClose
+        <footer className='bg-background grid shrink-0 grid-cols-2 gap-2 border-t px-3 py-3 sm:flex sm:flex-row sm:justify-end sm:px-5 sm:py-4'>
+          <DialogClose
             render={<Button variant='outline' className='w-full sm:w-auto' />}
           >
             {t('Cancel')}
-          </SheetClose>
+          </DialogClose>
           <Button
             form='api-key-form'
             type='submit'
-            disabled={isSubmitting}
+            disabled={isSubmitting || (!isUpdate && !hasSelectedGroup)}
             className='w-full sm:w-auto'
           >
             {isSubmitting && t('Saving...')}
             {!isSubmitting && (isUpdate ? t('Save changes') : t('Create'))}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </footer>
+      </Content>
+    </Dialog>
   )
 }

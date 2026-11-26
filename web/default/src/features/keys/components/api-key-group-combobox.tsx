@@ -76,7 +76,7 @@ function getRatioBadgeClassName(ratio: ApiKeyGroupOption['ratio']) {
   return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300'
 }
 
-function GroupRatioBadge({ ratio }: { ratio: ApiKeyGroupOption['ratio'] }) {
+export function GroupRatioBadge({ ratio }: { ratio: ApiKeyGroupOption['ratio'] }) {
   const { t } = useTranslation()
   const label = formatGroupRatio(ratio, t('Ratio'))
 
@@ -145,7 +145,7 @@ export function ApiKeyGroupCombobox({
         <span className='flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3'>
           <span className='min-w-0'>
             <span className='block truncate font-medium'>
-              {selectedOption?.value || placeholder || t('Select a group')}
+              {selectedOption?.label || placeholder || t('Select a group')}
             </span>
             {selectedOption?.desc && (
               <span className='text-muted-foreground block truncate text-[11px] sm:text-xs'>
@@ -189,7 +189,7 @@ export function ApiKeyGroupCombobox({
                   />
                   <span className='min-w-0 flex-1'>
                     <span className='block truncate font-medium'>
-                      {option.value}
+                      {option.label}
                     </span>
                     {option.desc && (
                       <span className='text-muted-foreground block truncate text-xs'>

@@ -82,6 +82,15 @@ func SaveUpstreamModelQuote(c *gin.Context) {
 	}
 }
 
+func ConfirmUpstreamModelQuotes(c *gin.Context) {
+	var input struct {
+		Revision int `json:"revision"`
+	}
+	if id := upstreamQuoteID(c); id > 0 && upstreamQuoteBody(c, &input) {
+		upstreamQuoteResult(c, nil, service.ConfirmUpstreamModelQuotes(id, input.Revision))
+	}
+}
+
 func RenameUpstreamQuoteChannel(c *gin.Context) {
 	var input struct {
 		Name string `json:"name"`

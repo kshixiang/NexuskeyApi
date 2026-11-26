@@ -219,6 +219,25 @@ func PreviewUpstreamImportGroups(input UpstreamImport) ([]UpstreamImportGroupPre
 	return groups, nil
 }
 
+func defaultUpstreamGroupProtocol(quotes []UpstreamQuote) string {
+	protocol := "openai"
+	for _, quote := range quotes {
+		if quote.Kind != "token" && quote.Kind != "fixed" {
+			continue
+		}
+		if len(quote.Endpoints) == 0 {
+			return "openai"
+		}
+		for _, endpoint := range quote.Endpoints {
+			if endpoint != string(constant.EndpointTypeAnthropic) {
+				return "openai"
+			}
+		}
+		protocol = "anthropic"
+	}
+	return protocol
+}
+
 func SaveUpstreamImport(input UpstreamImport) (model.UpstreamQuoteChannel, error) {
 	var channel model.UpstreamQuoteChannel
 	if err := ValidateUpstreamImport(input); err != nil {
@@ -245,12 +264,14 @@ func SaveUpstreamImport(input UpstreamImport) (model.UpstreamQuoteChannel, error
 		for _, item := range input.Groups {
 			var group model.UpstreamQuoteGroup
 			identity := upstreamGroupIdentity(item)
+			protocol := defaultUpstreamGroupProtocol(item.Quotes)
 			err := findUpstreamImportGroup(tx, channel.ID, item, &group)
 			switch {
 			case errors.Is(err, gorm.ErrRecordNotFound) && item.ExistingGroupID == 0:
 				group = model.UpstreamQuoteGroup{
 					ChannelID: channel.ID, SourceGroup: identity, OriginalName: item.Name, Name: item.Name,
-					SalesName: fmt.Sprintf("%d_%s", channel.ID, item.Name), Multiplier: 1, Protocol: "openai", Revision: 1,
+					SalesName: fmt.Sprintf("%d_%s", channel.ID, item.Name), Multiplier: 1, Revision: 1,
+					Protocol: protocol,
 				}
 				if err := tx.Create(&group).Error; err != nil {
 					return err
@@ -273,10 +294,31 @@ func SaveUpstreamImport(input UpstreamImport) (model.UpstreamQuoteChannel, error
 					return err
 				}
 			}
+			if group.Protocol == "openai" && protocol == "anthropic" {
+				if err := repairUpstreamAnthropicProtocol(tx, group.ID); err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 	})
 	return channel, err
+}
+
+func repairUpstreamAnthropicProtocol(tx *gorm.DB, groupID int) error {
+	// Reimports can retain missing or locally edited quotes. Check the saved draft.
+	stored, err := loadUpstreamQuotes(tx, groupID)
+	if err != nil {
+		return err
+	}
+	quotes := make([]UpstreamQuote, 0, len(stored))
+	for _, item := range stored {
+		quotes = append(quotes, item.Quote)
+	}
+	if defaultUpstreamGroupProtocol(quotes) != "anthropic" {
+		return nil
+	}
+	return tx.Model(&model.UpstreamQuoteGroup{}).Where("id = ?", groupID).Update("protocol", "anthropic").Error
 }
 
 func saveUpstreamQuote(tx *gorm.DB, groupID int, imported int64, quote UpstreamQuote) error {
@@ -348,6 +390,30 @@ func SaveUpstreamModelQuote(groupID, revision int, quote UpstreamQuote) error {
 		}
 		quote.Reference = source.Reference
 		return storeUpstreamQuote(tx, groupID, modelRow.LastSeenImport, quote)
+	})
+}
+
+func ConfirmUpstreamModelQuotes(groupID, revision int) error {
+	return model.DB.Transaction(func(tx *gorm.DB) error {
+		if err := updateUpstreamDraft(tx, groupID, revision, map[string]any{}); err != nil {
+			return err
+		}
+		quotes, err := loadUpstreamQuotes(tx, groupID)
+		if err != nil {
+			return err
+		}
+		for _, item := range quotes {
+			quote := item.Quote
+			if quote.Confirmed && quote.UsageVerified {
+				continue
+			}
+			quote.Confirmed = true
+			quote.UsageVerified = true
+			if err := storeUpstreamQuote(tx, groupID, item.LastSeen, quote); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

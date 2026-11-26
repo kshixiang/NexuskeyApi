@@ -599,7 +599,11 @@ function ImportQuotes({
   )
 }
 
-function GroupQuotesDialog(props: { name: string; children: ReactNode }) {
+function GroupQuotesDialog(props: {
+  name: string
+  actions?: ReactNode
+  children: ReactNode
+}) {
   const { t } = useTranslation()
   return (
     <Dialog>
@@ -610,11 +614,14 @@ function GroupQuotesDialog(props: { name: string; children: ReactNode }) {
         {t('Details')}
       </DialogTrigger>
       <DialogContent className='flex max-h-[85dvh] min-h-0 flex-col overflow-hidden sm:max-w-5xl'>
-        <DialogHeader className='shrink-0 pr-8'>
-          <DialogTitle>{t('Group model quotes')}</DialogTitle>
-          <DialogDescription className='[overflow-wrap:anywhere]'>
-            {props.name}
-          </DialogDescription>
+        <DialogHeader className='shrink-0 flex-row flex-wrap items-start justify-between pr-8'>
+          <div className='min-w-0 space-y-2'>
+            <DialogTitle>{t('Group model quotes')}</DialogTitle>
+            <DialogDescription className='[overflow-wrap:anywhere]'>
+              {props.name}
+            </DialogDescription>
+          </div>
+          {props.actions}
         </DialogHeader>
         <div
           role='region'
@@ -721,12 +728,21 @@ function GroupSettings({
   const client = useQueryClient()
   const [form, setForm] = useState(() => groupFormValues(group))
   const [historic, setHistoric] = useState(0)
+  const [confirmedRevision, setConfirmedRevision] = useState<number>()
   if (form.revision !== group.revision) {
-    setForm(groupFormValues(group))
-    setHistoric(0)
+    if (group.revision === confirmedRevision) {
+      setForm({ ...form, revision: group.revision })
+    } else {
+      setForm(groupFormValues(group))
+      setHistoric(0)
+    }
+    setConfirmedRevision(undefined)
   }
   const { name, sales, key, base, protocol, mark } = form
   const quotes = group.quotes ?? []
+  const pendingQuoteCount = quotes.filter(
+    ({ quote }) => !quote.confirmed || !quote.usage_verified
+  ).length
   const finalMode =
     group.upstream_multiplier != null || group.final_multiplier != null
   const ratio = Number(mark)
@@ -778,12 +794,27 @@ function GroupSettings({
       if ('response' in error) void refresh()
     },
   })
+  const confirmAll = useMutation({
+    mutationFn: (revision: number) =>
+      request('post', '/groups/' + group.id + '/quotes/confirm', { revision }),
+    onSuccess: async (_, revision) => {
+      setConfirmedRevision(revision + 1)
+      await refresh()
+      toast.success(t('Saved successfully'))
+    },
+    onError: (error) => {
+      if (isAxiosError(error) && error.response?.status === 409) return refresh()
+    },
+  })
+  const confirmationError = isAxiosError<Envelope<unknown>>(confirmAll.error)
+    ? confirmAll.error.response?.data?.message || confirmAll.error.message
+    : confirmAll.error?.message
   const costMultiplier = group.upstream_multiplier
   const margin =
     ratio > 0 && (!finalMode || costMultiplier != null)
       ? ((1 - (costMultiplier ?? 1) / ratio) * 100).toFixed(2) + '%'
       : '—'
-  const busy = save.isPending || listing.isPending
+  const busy = save.isPending || listing.isPending || confirmAll.isPending
   const blockedQuote = quotes.find(
     (item) =>
       !item.sale &&
@@ -929,7 +960,29 @@ function GroupSettings({
         <span className='text-sm font-medium'>
           {t('Models in this group')} ({quotes.length})
         </span>
-        <GroupQuotesDialog name={group.name}>
+        <GroupQuotesDialog
+          name={group.name}
+          actions={
+            <div className='flex flex-col items-start gap-2'>
+              <Button
+                type='button'
+                size='sm'
+                disabled={busy || pendingQuoteCount === 0}
+                onClick={() => confirmAll.mutate(group.revision)}
+              >
+                {confirmAll.isPending ? t('Saving...') : t('Confirm all quotes')}
+                {!confirmAll.isPending &&
+                  pendingQuoteCount > 0 &&
+                  ` (${pendingQuoteCount})`}
+              </Button>
+              {confirmationError && (
+                <p className='text-destructive text-sm' role='alert'>
+                  {t(confirmationError, { defaultValue: confirmationError })}
+                </p>
+              )}
+            </div>
+          }
+        >
           <SavedGroupQuotes
             group={group}
             quotes={quotes}
@@ -937,6 +990,7 @@ function GroupSettings({
             finalMultiplier={finalMultiplier}
             credit={group.credit_cost}
             importedAt={importedAt}
+            isConfirming={confirmAll.isPending}
             onSaved={refresh}
           />
         </GroupQuotesDialog>
@@ -1009,6 +1063,7 @@ function SavedGroupQuotes(props: {
   finalMultiplier?: number
   credit: number
   importedAt: number
+  isConfirming: boolean
   onSaved: () => Promise<void>
 }) {
   const { t } = useTranslation()
@@ -1099,6 +1154,7 @@ function SavedGroupQuotes(props: {
                 <QuoteEditorDialog
                   group={props.group}
                   quote={item.quote}
+                  disabled={props.isConfirming}
                   onSaved={props.onSaved}
                 />
                 {item.last_seen_import < props.importedAt && (
@@ -1180,10 +1236,12 @@ function readQuoteForm(form: HTMLFormElement, quote: Quote): Quote {
 function QuoteEditorDialog({
   group,
   quote,
+  disabled,
   onSaved,
 }: {
   group: Group
   quote: Quote
+  disabled: boolean
   onSaved: () => Promise<void>
 }) {
   const { t } = useTranslation()
@@ -1231,6 +1289,7 @@ function QuoteEditorDialog({
     >
       <DialogTrigger
         aria-label={t('Edit quote') + ' · ' + quote.model_id}
+        disabled={disabled}
         render={<Button type='button' size='xs' variant='ghost' />}
       >
         {t('Edit quote')}

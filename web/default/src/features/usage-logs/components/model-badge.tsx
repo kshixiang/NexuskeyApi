@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Route } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getLobeIcon } from '@/lib/lobe-icon'
+import { resolveModelProvider } from '@/lib/model-provider'
 import { cn } from '@/lib/utils'
 import {
   Popover,
@@ -31,64 +32,6 @@ interface ModelBadgeProps {
   modelName: string
   actualModel?: string
   className?: string
-}
-
-interface ModelProvider {
-  icon: string
-  label: string
-}
-
-function resolveModelProvider(modelName: string): ModelProvider | null {
-  const model = modelName.toLowerCase()
-  const hasAny = (keywords: string[]) =>
-    keywords.some((keyword) => model.includes(keyword))
-
-  if (
-    hasAny([
-      'gpt-',
-      'chatgpt-',
-      'text-embedding-',
-      'omni-moderation',
-      'dall-e',
-      'whisper',
-      'tts-',
-    ]) ||
-    /\bo[134](?:-|$)/.test(model)
-  ) {
-    return { icon: 'OpenAI.Color', label: 'OpenAI' }
-  }
-  if (hasAny(['claude-', 'anthropic'])) {
-    return { icon: 'Claude.Color', label: 'Claude' }
-  }
-  if (hasAny(['gemini-', 'learnlm-'])) {
-    return { icon: 'Gemini.Color', label: 'Gemini' }
-  }
-  if (hasAny(['grok-', 'xai-'])) {
-    return { icon: 'Grok.Color', label: 'Grok' }
-  }
-  if (hasAny(['deepseek-'])) {
-    return { icon: 'DeepSeek.Color', label: 'DeepSeek' }
-  }
-  if (hasAny(['qwen', 'qwq-'])) {
-    return { icon: 'Qwen.Color', label: 'Qwen' }
-  }
-  if (hasAny(['doubao-', 'volcengine'])) {
-    return { icon: 'Doubao.Color', label: 'Doubao' }
-  }
-  if (hasAny(['moonshot-', 'kimi-'])) {
-    return { icon: 'Moonshot.Color', label: 'Moonshot' }
-  }
-  if (hasAny(['mistral-', 'mixtral-'])) {
-    return { icon: 'Mistral.Color', label: 'Mistral' }
-  }
-  if (hasAny(['llama-', 'meta-'])) {
-    return { icon: 'Meta.Color', label: 'Meta' }
-  }
-  if (hasAny(['command-', 'cohere-'])) {
-    return { icon: 'Cohere.Color', label: 'Cohere' }
-  }
-
-  return null
 }
 
 function ModelBadgeContent(props: ModelBadgeProps) {

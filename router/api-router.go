@@ -247,6 +247,7 @@ func SetApiRouter(router *gin.Engine) {
 		upstreamQuoteRoute.GET("/groups/:id", controller.GetUpstreamQuoteGroup)
 		upstreamQuoteRoute.PUT("/groups/:id", controller.SaveUpstreamQuoteGroup)
 		upstreamQuoteRoute.PUT("/groups/:id/quote", controller.SaveUpstreamModelQuote)
+		upstreamQuoteRoute.POST("/groups/:id/quotes/confirm", controller.ConfirmUpstreamModelQuotes)
 		upstreamQuoteRoute.POST("/groups/:id/listing", controller.PublishUpstreamQuoteGroup)
 		upstreamQuoteRoute.POST("/compare", controller.CompareUpstreamQuotes)
 		channelRoute := apiRouter.Group("/channel")
