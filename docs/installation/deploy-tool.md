@@ -64,7 +64,6 @@ PostgreSQL / Redis 数据在 Docker 卷 `pg_data`、`redis_data`（项目名默�
 | `stop` | 停止所有容器（**保留**数据库卷与 `data/`） |
 | `update` | 从本仓库**重新构建**镜像并重启（见下文「代码更新」） |
 | `redeploy` | `stop` + `update`（从官方镜像切到自建代码时用） |
-| `fix-theme` | 将数据库前端主题改为 `default`（修复 classic 占位页） |
 | `logs` | 跟踪日志（默认 new-api） |
 | `backup` | 打包 `data/`、`logs/`、`.env` |
 
@@ -85,8 +84,6 @@ PostgreSQL / Redis 数据在 Docker 卷 `pg_data`、`redis_data`（项目名默�
 | `--port PORT` | 宿主机 HTTP 端口（默认 3000） |
 | `--build` | 强制从本仓库构建（有 `Dockerfile` 时 `install`/`update` 通常已自动开启） |
 | `--upstream` | 使用官方 `calciumion/new-api` 镜像（**不含**你改的代码） |
-| `--with-classic` | 同时构建旧版 `web/classic` 前端（更慢） |
-| `--skip-classic` | 跳过 classic 构建（**默认**；站点用 `web/default`） |
 
 ## 代码更新（改完代码后发布到线上）
 
@@ -119,9 +116,8 @@ git pull
 
 1. 自动设置 `BUILD_FROM_SOURCE`，构建镜像 **`nexuskey-api:local`**
 2. 编译 **Go 后端** + **`web/default`**（你改的新版 UI）
-3. 默认 **跳过** `web/classic`（加快构建）
-4. 将 `DEPLOY_IMAGE=nexuskey-api:local` 写入部署目录 `.env`
-5. `docker compose up -d --force-recreate` 重启容器  
+3. 将 `DEPLOY_IMAGE=nexuskey-api:local` 写入部署目录 `.env`
+4. `docker compose up -d --force-recreate` 重启容器。
    **PostgreSQL / Redis 数据与 `data/` 目录不会删除**
 
 ### 什么需要 `update`、什么不需要
@@ -151,18 +147,6 @@ docker inspect new-api --format '{{.Config.Image}}'
 若为 `calciumion/new-api:latest`，说明仍在跑官方镜像：不要用 `--upstream`，在仓库目录执行 `update` 或 `redeploy`。
 
 ### 特殊场景
-
-**也改了 `web/classic` 老界面：**
-
-```bash
-./scripts/deploy.sh update --dir /www/wwwroot/nexuskey-api --with-classic
-```
-
-**页面显示 `classic theme not built`：**
-
-```bash
-./scripts/deploy.sh fix-theme --dir /www/wwwroot/nexuskey-api
-```
 
 **当前是官方镜像，要换成自己的代码：**
 
@@ -300,16 +284,6 @@ docker run --rm \
 ### 从简易模式升级到生产？
 
 简易模式与生产栈容器名/卷不同，建议**新目录**执行生产 `install`，再迁移业务数据（或按官方文档导出/导入）。
-
-### 页面显示 classic theme not built？
-
-部署默认不构建 classic 前端，但数据库可能仍选 classic 主题。执行：
-
-```bash
-./scripts/deploy.sh fix-theme --dir /www/wwwroot/nexuskey-api
-```
-
-或在管理后台将「前端主题」改为 **新版前端（default）**。
 
 ## 相关链接
 

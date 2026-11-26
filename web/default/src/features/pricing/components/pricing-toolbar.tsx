@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -160,7 +161,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
   )
 
   return (
-    <div className='rounded-xl border p-3'>
+    <div>
       <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
         <div className='flex items-center gap-2'>
           <Button
@@ -168,7 +169,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
             variant='outline'
             size='sm'
             onClick={() => setMobileFiltersOpen(true)}
-            className='gap-1.5 xl:hidden'
+            className='gap-1.5'
           >
             <Filter className='size-4' />
             {t('Filter')}
@@ -193,7 +194,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
         </div>
 
         <div className='flex flex-wrap items-center gap-2'>
-          <div className='hidden items-center gap-2 sm:flex'>
+          <div className='flex items-center gap-2'>
             <SegmentedControl
               options={[
                 { value: 'standard', label: t('Standard') },
@@ -229,21 +230,23 @@ export function PricingToolbar(props: PricingToolbarProps) {
               <span>{sortLabels[props.sortBy as SortOption] || t('Sort')}</span>
             </DropdownMenuTrigger>
             <DropdownMenuContent align='end' className='w-44'>
-              {Object.entries(sortLabels).map(([value, label]) => (
-                <DropdownMenuItem
-                  key={value}
-                  onClick={() => props.onSortChange(value)}
-                  className='gap-2'
-                >
-                  <Check
-                    className={cn(
-                      'size-4 shrink-0',
-                      props.sortBy === value ? 'opacity-100' : 'opacity-0'
-                    )}
-                  />
-                  {label}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuGroup>
+                {Object.entries(sortLabels).map(([value, label]) => (
+                  <DropdownMenuItem
+                    key={value}
+                    onClick={() => props.onSortChange(value)}
+                    className='gap-2'
+                  >
+                    <Check
+                      className={cn(
+                        'size-4 shrink-0',
+                        props.sortBy === value ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                    {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
 

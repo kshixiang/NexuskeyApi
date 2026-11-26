@@ -131,9 +131,6 @@ cd /www/wwwroot/NexuskeyApi
 
 # 备份 data + .env
 ./scripts/deploy.sh backup --dir /www/wwwroot/nexuskey-api
-
-# 修复 classic theme not built
-./scripts/deploy.sh fix-theme --dir /www/wwwroot/nexuskey-api
 ```
 
 完整命令与参数见 [deploy-tool.md](./deploy-tool.md)。
@@ -203,9 +200,8 @@ git pull
 ### `update` 会做什么
 
 1. 检测仓库有 `Dockerfile` 时，自动构建 **`nexuskey-api:local`**（你的 Go + `web/default`）
-2. 默认**不**构建 `web/classic`（加快速度）
-3. 写入 `DEPLOY_IMAGE=nexuskey-api:local` 到部署目录 `.env`
-4. 强制重建并启动容器（PostgreSQL / Redis 卷保留）
+2. 写入 `DEPLOY_IMAGE=nexuskey-api:local` 到部署目录 `.env`
+3. 强制重建并启动容器（PostgreSQL / Redis 卷保留）
 
 无需手写 `--build`；**不要**加 `--upstream`（那是官方未改代码的镜像）。
 
@@ -238,8 +234,6 @@ docker inspect new-api --format '{{.Config.Image}}'
 
 | 场景 | 命令 |
 |------|------|
-| 也改了 `web/classic` 老界面 | `update ... --with-classic` |
-| 页面 `classic theme not built` | `fix-theme --dir /www/wwwroot/nexuskey-api` |
 | 构建失败查日志 | `logs --dir /www/wwwroot/nexuskey-api` |
 | 仅停止服务 | `stop --dir /www/wwwroot/nexuskey-api` |
 
@@ -251,7 +245,6 @@ docker inspect new-api --format '{{.Config.Image}}'
 
 | 现象 | 处理 |
 |------|------|
-| 页面显示 **classic theme not built** | 部署时跳过了 classic 前端，但数据库仍选 classic。执行：`./scripts/deploy.sh fix-theme --dir /www/wwwroot/nexuskey-api`，然后浏览器 Ctrl+F5。或在管理后台把「前端主题」改为 **新版前端（default）**。若必须用 classic UI：`update --with-classic` 重新构建（更慢） |
 | 域名 502 | `status` 看容器是否运行；反代是否指向 `127.0.0.1:3000` |
 | IP:3000 能开，域名不行 | 检查 DNS、SSL、反代配置 |
 | 登录后会话失效 | 检查 `.env` 中 `SESSION_SECRET` 是否为空或被改过 |
