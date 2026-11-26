@@ -127,6 +127,9 @@ export interface LogOtherData {
   model_price?: number
   group_ratio?: number
   user_group_ratio?: number
+  upstream_sale_version?: number
+  sale_group_name?: string
+  sale_group_multiplier?: number | null
   cache_ratio?: number
   cache_creation_ratio?: number
   cache_creation_ratio_5m?: number

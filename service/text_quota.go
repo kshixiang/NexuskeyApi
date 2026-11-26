@@ -508,6 +508,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if route != nil {
 		other["upstream_sale_version"] = route.Version
 		other["upstream_quote_version"] = route.QuoteVersion
+		other["sale_group_name"] = route.SalesName
+		other["sale_group_multiplier"] = route.FinalMultiplier
 	}
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{

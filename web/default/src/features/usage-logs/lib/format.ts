@@ -105,6 +105,13 @@ export function parseLogOther(other: string): LogOtherData | null {
   }
 }
 
+export function getLogGroupName(
+  log: UsageLog,
+  other: LogOtherData | null
+): string {
+  return other?.sale_group_name || log.group || other?.group || ''
+}
+
 /**
  * Get time color based on duration (in seconds)
  */

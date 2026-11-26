@@ -76,14 +76,16 @@ type UpstreamSaleModel struct {
 }
 
 type UpstreamSaleRoute struct {
-	Channel      Channel
-	Group        string
-	Version      int
-	QuoteVersion int
-	Expression   string
-	FixedPrice   float64
-	Fixed        bool
-	Endpoints    string
+	Channel         Channel
+	Group           string
+	SalesName       string
+	FinalMultiplier *float64
+	Version         int
+	QuoteVersion    int
+	Expression      string
+	FixedPrice      float64
+	Fixed           bool
+	Endpoints       string
 }
 
 const upstreamGroupPrefix = "upstream-sale-"
@@ -117,17 +119,20 @@ func ResolveUpstreamSaleRoute(group, modelName string) (*UpstreamSaleRoute, erro
 		Channel               `gorm:"embedded"`
 		Version, QuoteVersion int
 		Expression, Endpoints string
-		ModelName             string
+		ModelName, SalesName  string
+		FinalMultiplier       *float64
 		Fixed                 bool
 		FixedPrice            float64
 	}
 	result := activeUpstreamSaleModels().Where("grp.id = ? AND sale.model_name = ?", id, modelName).
-		Select("ch.*, ver.id AS version, sale.model_name, sale.quote_version, sale.expression, sale.endpoints, sale.fixed, sale.fixed_price").Limit(1).Scan(&row)
+		Select("ch.*, grp.sales_name, ver.final_multiplier, ver.id AS version, " +
+			"sale.model_name, sale.quote_version, sale.expression, sale.endpoints, sale.fixed, sale.fixed_price").Limit(1).Scan(&row)
 	if result.Error != nil || result.RowsAffected == 0 || row.Group != group || row.ModelName != modelName || row.Key == "" {
 		return nil, result.Error
 	}
 	return &UpstreamSaleRoute{
-		Channel: row.Channel, Group: group, Version: row.Version, QuoteVersion: row.QuoteVersion,
+		Channel: row.Channel, Group: group, SalesName: row.SalesName, FinalMultiplier: row.FinalMultiplier,
+		Version: row.Version, QuoteVersion: row.QuoteVersion,
 		Expression: row.Expression, FixedPrice: row.FixedPrice, Fixed: row.Fixed, Endpoints: row.Endpoints,
 	}, nil
 }

@@ -51,7 +51,67 @@ const (
 	LogTypeRefund  = 6
 )
 
+// Old consumption logs have a sale version but no display metadata.
+func fillLegacySaleLogDetails(logs []*Log) {
+	type legacyLog struct {
+		log   *Log
+		other map[string]any
+	}
+	logsByVersion := make(map[int][]legacyLog)
+	var versionIDs []int
+	for _, log := range logs {
+		if log.Type != LogTypeConsume || !IsUpstreamSaleGroup(log.Group) {
+			continue
+		}
+		other, err := common.StrToMap(log.Other)
+		if err != nil {
+			continue
+		}
+		if _, hasSnapshot := other["sale_group_name"]; hasSnapshot {
+			continue
+		}
+		version, ok := other["upstream_sale_version"].(float64)
+		if !ok || version <= 0 || float64(int(version)) != version {
+			continue
+		}
+		id := int(version)
+		if len(logsByVersion[id]) == 0 {
+			versionIDs = append(versionIDs, id)
+		}
+		logsByVersion[id] = append(logsByVersion[id], legacyLog{log: log, other: other})
+	}
+	if len(versionIDs) == 0 {
+		return
+	}
+
+	var versions []struct {
+		ID, GroupID, ChannelID int
+		SalesName              string
+		FinalMultiplier        *float64
+	}
+	err := DB.Table("upstream_sale_versions AS ver").
+		Select("ver.id, ver.group_id, ver.channel_id, ver.final_multiplier, grp.sales_name").
+		Joins("JOIN upstream_quote_groups AS grp ON grp.id = ver.group_id").
+		Where("ver.id IN ?", versionIDs).Scan(&versions).Error
+	if err != nil {
+		common.SysLog("failed to load sale groups for usage logs: " + err.Error())
+		return
+	}
+	for _, version := range versions {
+		group := UpstreamSaleGroupKey(version.GroupID)
+		for _, entry := range logsByVersion[version.ID] {
+			if entry.log.Group != group || entry.log.ChannelId != version.ChannelID {
+				continue
+			}
+			entry.other["sale_group_name"] = version.SalesName
+			entry.other["sale_group_multiplier"] = version.FinalMultiplier
+			entry.log.Other = common.MapToJsonStr(entry.other)
+		}
+	}
+}
+
 func formatUserLogs(logs []*Log, startIdx int) {
+	fillLegacySaleLogDetails(logs)
 	for i, log := range logs {
 		log.ChannelName = ""
 		otherMap, _ := common.StrToMap(log.Other)
@@ -383,6 +443,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		}
 	}
 
+	fillLegacySaleLogDetails(logs)
 	return logs, total, err
 }
 

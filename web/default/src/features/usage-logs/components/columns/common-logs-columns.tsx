@@ -49,6 +49,7 @@ import { StatusBadge, type StatusBadgeProps } from '@/components/status-badge'
 import type { UsageLog } from '../../data/schema'
 import {
   formatModelName,
+  getLogGroupName,
   getTieredBillingSummary,
   hasAnyCacheTokens,
   parseLogOther,
@@ -79,6 +80,11 @@ function formatRatioCompact(ratio: number | undefined): string {
 }
 
 function getGroupRatioText(other: LogOtherData | null): string | null {
+  if (other?.upstream_sale_version != null) {
+    const multiplier = other.sale_group_multiplier
+    return multiplier == null ? null : `${multiplier}x`
+  }
+
   const userGroupRatio = other?.user_group_ratio
   if (
     userGroupRatio != null &&
@@ -173,11 +179,15 @@ function buildCostDetailRows(
 ): TooltipRow[] {
   const rows: TooltipRow[] = []
   const tokens = getUsageTokens(log, other)
-  const ratio = getEffectiveRatio(other)
-  const ratioText =
-    ratio != null && Number.isFinite(ratio)
-      ? `${formatRatioCompact(ratio)}x`
-      : '-'
+  const isUpstreamSale = other?.upstream_sale_version != null
+  const ratio = isUpstreamSale
+    ? (other.sale_group_multiplier ?? null)
+    : getEffectiveRatio(other)
+  let ratioText = '-'
+  if (ratio != null && Number.isFinite(ratio)) {
+    const displayedRatio = isUpstreamSale ? ratio : formatRatioCompact(ratio)
+    ratioText = `${displayedRatio}x`
+  }
   const chargedUSD =
     (log.quota || 0) / getCurrencyDisplay().config.quotaPerUnit
   let originalUSD: number | null = null
@@ -242,23 +252,29 @@ function buildCostDetailRows(
     }
   }
 
-  if (ratio != null && ratio > 0 && chargedUSD > 0) {
+  if (ratio != null && ratio > 0 && (isUpstreamSale || chargedUSD > 0)) {
     originalUSD = chargedUSD / ratio
   }
+  const originalAmount = isUpstreamSale
+    ? originalUSD
+    : (originalUSD ?? chargedUSD)
 
   rows.push({
     label: t('Service Tier'),
     value: getServiceTierLabel(other, t),
     divider: true,
   })
-  rows.push({ label: t('Ratio'), value: ratioText })
+  rows.push({
+    label: isUpstreamSale ? t('Final sales multiplier') : t('Ratio'),
+    value: ratioText,
+  })
 
   rows.push({
     label: t('Original Cost'),
     value:
-      originalUSD != null
-        ? formatBillingCurrencyFromUSD(originalUSD, AMOUNT_FORMAT_OPTS)
-        : formatBillingCurrencyFromUSD(chargedUSD, AMOUNT_FORMAT_OPTS),
+      originalAmount != null
+        ? formatBillingCurrencyFromUSD(originalAmount, AMOUNT_FORMAT_OPTS)
+        : '-',
     divider: true,
   })
   rows.push({
@@ -520,16 +536,23 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
 
           const other = parseLogOther(log.other)
           const affinity = other?.admin_info?.channel_affinity
+          const affinityGroup =
+            affinity?.using_group || affinity?.selected_group
+          const affinityGroupName =
+            other?.sale_group_name && affinityGroup === log.group
+              ? other.sale_group_name
+              : affinityGroup
           const useChannel = other?.admin_info?.use_channel
           const channelChain =
             useChannel && useChannel.length > 0
               ? useChannel.join(' → ')
               : undefined
-          const channelDisplay = log.channel_name
-            ? `${log.channel_name} #${log.channel}`
+          const channelLabel = other?.sale_group_name || log.channel_name
+          const channelDisplay = channelLabel
+            ? `${channelLabel} #${log.channel}`
             : `#${log.channel}`
           const channelIdDisplay = `#${log.channel}`
-          const channelName = sensitiveVisible ? log.channel_name : '••••'
+          const channelName = sensitiveVisible ? channelLabel : '••••'
 
           return (
             <TooltipProvider>
@@ -569,7 +592,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                       </button>
                     )}
                   </div>
-                  {log.channel_name && (
+                  {channelLabel && (
                     <span className='text-muted-foreground/70 truncate text-[11px]'>
                       {channelName}
                     </span>
@@ -593,11 +616,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                         </p>
                         <p>
                           {t('Group')}:{' '}
-                          {sensitiveVisible
-                            ? affinity.using_group ||
-                              affinity.selected_group ||
-                              '-'
-                            : '••••'}
+                          {sensitiveVisible ? affinityGroupName || '-' : '••••'}
                         </p>
                       </div>
                     )}
@@ -672,8 +691,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
 
       const other = parseLogOther(log.other)
       const displayName = sensitiveVisible ? tokenName : '••••'
-      let group = log.group
-      if (!group) group = other?.group || ''
+      const group = getLogGroupName(log, other)
 
       const metaParts: string[] = []
       const groupRatioText = getGroupRatioText(other)

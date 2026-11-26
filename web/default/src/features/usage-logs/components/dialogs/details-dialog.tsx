@@ -50,6 +50,7 @@ import { DynamicPricingBreakdown } from '@/features/pricing/components/dynamic-p
 import type { UsageLog } from '../../data/schema'
 import {
   parseLogOther,
+  getLogGroupName,
   getParamOverrideActionLabel,
   parseAuditLine,
   decodeBillingExprB64,
@@ -203,7 +204,13 @@ function BillingBreakdown(props: {
   const userGR = other.user_group_ratio
   const isUserGR = userGR != null && Number.isFinite(userGR) && userGR !== -1
   const effectiveGR = isUserGR ? userGR : other.group_ratio
-  if (effectiveGR != null && Number.isFinite(effectiveGR)) {
+  if (other.upstream_sale_version != null) {
+    const multiplier = other.sale_group_multiplier
+    rows.push({
+      label: t('Final sales multiplier'),
+      value: multiplier == null ? '-' : `${multiplier}x`,
+    })
+  } else if (effectiveGR != null && Number.isFinite(effectiveGR)) {
     rows.push({
       label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
       value: `${formatRatio(effectiveGR)}x`,
@@ -403,6 +410,8 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const { copiedText, copyToClipboard } = useCopyToClipboard({ notify: false })
   const details = props.log.content ?? ''
   const other = parseLogOther(props.log.other)
+  const groupName = getLogGroupName(props.log, other)
+  const channelName = other?.sale_group_name || props.log.channel_name
   const typeConfig = getLogTypeConfig(props.log.type)
 
   const isViolation = isViolationFeeLog(other)
@@ -526,10 +535,10 @@ export function DetailsDialog(props: DetailsDialogProps) {
                   value={
                     <span>
                       {props.log.channel}
-                      {props.log.channel_name && (
+                      {channelName && (
                         <span className='text-muted-foreground'>
                           {' '}
-                          ({props.log.channel_name})
+                          ({channelName})
                         </span>
                       )}
                     </span>
@@ -550,12 +559,8 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 />
               )}
 
-              {(props.log.group || other?.group) && (
-                <DetailRow
-                  label={t('Group')}
-                  value={props.log.group || other?.group || ''}
-                  mono
-                />
+              {groupName && (
+                <DetailRow label={t('Group')} value={groupName} mono />
               )}
 
               {showAdminIp && (
