@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -153,8 +154,7 @@ func VideoProxy(c *gin.Context) {
 
 	if resp.StatusCode != http.StatusOK {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Upstream returned status %d for %s", resp.StatusCode, videoURL))
-		videoProxyError(c, http.StatusBadGateway, "server_error",
-			fmt.Sprintf("Upstream service returned status %d", resp.StatusCode))
+		videoProxyError(c, http.StatusServiceUnavailable, string(types.ErrorCodeUpstreamUnavailable), types.UpstreamUnavailableMessage)
 		return
 	}
 

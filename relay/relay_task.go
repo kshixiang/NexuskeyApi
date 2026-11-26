@@ -19,6 +19,7 @@ import (
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -219,11 +220,16 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	// 9. 发送请求
 	resp, err := adaptor.DoRequest(c, info, requestBody)
 	if err != nil {
-		return nil, service.TaskErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
+		taskErr := service.TaskErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
+		taskErr.Upstream = true
+		return nil, taskErr
 	}
 	if resp != nil && resp.StatusCode != http.StatusOK {
+		defer service.CloseResponseBodyGracefully(resp)
 		responseBody, _ := io.ReadAll(resp.Body)
-		return nil, service.TaskErrorWrapper(fmt.Errorf("%s", string(responseBody)), "fail_to_fetch_task", resp.StatusCode)
+		taskErr := service.TaskErrorWrapper(errors.New(string(responseBody)), "fail_to_fetch_task", resp.StatusCode)
+		taskErr.Upstream = true
+		return nil, taskErr
 	}
 
 	// 10. 返回 OtherRatios 给下游（header 必须在 DoResponse 写 body 之前设置）
@@ -237,6 +243,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	// 11. 解析响应
 	upstreamTaskID, taskData, taskErr := adaptor.DoResponse(c, resp, info)
 	if taskErr != nil {
+		taskErr.Upstream = true
 		return nil, taskErr
 	}
 
@@ -326,7 +333,7 @@ func sunoFetchRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dto.Ta
 			return
 		}
 		for _, task := range taskModels {
-			tasks = append(tasks, TaskModel2Dto(task))
+			tasks = append(tasks, TaskModel2Dto(task, false))
 		}
 	} else {
 		tasks = make([]any, 0)
@@ -354,7 +361,7 @@ func sunoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *dt
 
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
-		Data: TaskModel2Dto(originTask),
+		Data: TaskModel2Dto(originTask, false),
 	})
 	return
 }
@@ -395,7 +402,19 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 			openAIVideoData, err := converter.ConvertToOpenAIVideo(originTask)
 			if err != nil {
 				taskResp = service.TaskErrorWrapper(err, "convert_to_openai_video_failed", http.StatusInternalServerError)
+				taskResp.Upstream = true
 				return
+			}
+			if upstreamErr := service.UpstreamPayloadError(openAIVideoData, ""); upstreamErr != nil || originTask.Status == model.TaskStatusFailure {
+				video := originTask.ToOpenAIVideo()
+				video.Status = dto.VideoStatusFailed
+				video.Metadata = nil
+				video.Error = &dto.OpenAIVideoError{Code: string(types.ErrorCodeUpstreamUnavailable), Message: types.UpstreamUnavailableMessage}
+				openAIVideoData, err = common.Marshal(video)
+				if err != nil {
+					taskResp = service.TaskErrorWrapperLocal(err, "marshal_response_failed", http.StatusInternalServerError)
+					return
+				}
 			}
 			respBody = openAIVideoData
 			return
@@ -407,7 +426,7 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 	// 通用 TaskDto 格式
 	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
-		Data: TaskModel2Dto(originTask),
+		Data: TaskModel2Dto(originTask, false),
 	})
 	if err != nil {
 		taskResp = service.TaskErrorWrapper(err, "marshal_response_failed", http.StatusInternalServerError)
@@ -492,6 +511,10 @@ func tryRealtimeFetch(task *model.Task, isOpenAIVideoAPI bool) []byte {
 		"task_id":  task.TaskID,
 		"url":      task.GetResultURL(),
 	}
+	if task.Status == model.TaskStatusFailure {
+		out["error"] = dto.OpenAIVideoError{Code: string(types.ErrorCodeUpstreamUnavailable), Message: types.UpstreamUnavailableMessage}
+		out["url"] = ""
+	}
 	respBody, _ := common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
 		Data: out,
@@ -538,8 +561,8 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 	}
 }
 
-func TaskModel2Dto(task *model.Task) *dto.TaskDto {
-	return &dto.TaskDto{
+func TaskModel2Dto(task *model.Task, includeErrorDetails bool) *dto.TaskDto {
+	result := &dto.TaskDto{
 		ID:         task.ID,
 		CreatedAt:  task.CreatedAt,
 		UpdatedAt:  task.UpdatedAt,
@@ -561,4 +584,10 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Username:   task.Username,
 		Data:       task.Data,
 	}
+	if !includeErrorDetails && task.Status == model.TaskStatusFailure {
+		result.FailReason = types.UpstreamUnavailableMessage
+		result.ResultURL = ""
+		result.Data = nil
+	}
+	return result
 }

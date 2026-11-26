@@ -40,13 +40,20 @@ type GeneralErrorResponse struct {
 
 func (e GeneralErrorResponse) TryToOpenAIError() *types.OpenAIError {
 	var openAIError types.OpenAIError
-	if len(e.Error) > 0 {
-		err := common.Unmarshal(e.Error, &openAIError)
-		if err == nil && openAIError.Message != "" {
-			return &openAIError
+	if len(e.Error) == 0 || common.Unmarshal(e.Error, &openAIError) != nil {
+		return nil
+	}
+	if openAIError.Message == "" {
+		code, _ := openAIError.Code.(string)
+		if !types.IsUpstreamBalanceError("", openAIError.Type, code) {
+			return nil
+		}
+		openAIError.Message = openAIError.Type
+		if openAIError.Message == "" {
+			openAIError.Message = code
 		}
 	}
-	return nil
+	return &openAIError
 }
 
 func (e GeneralErrorResponse) ToMessage() string {

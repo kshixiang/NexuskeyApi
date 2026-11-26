@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -292,6 +294,15 @@ func GetUserMidjourney(c *gin.Context) {
 
 	items := model.GetAllUserTask(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), queryParams)
 	total := model.CountAllUserTask(userId, queryParams)
+
+	for _, task := range items {
+		if task.HasFailure() {
+			task.Code = constant.MjRequestError
+			task.FailReason = types.UpstreamUnavailableMessage
+			task.Description = types.UpstreamUnavailableMessage
+			task.Properties = ""
+		}
+	}
 
 	if setting.MjForwardUrlEnabled {
 		for i, midjourney := range items {

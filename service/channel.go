@@ -55,6 +55,9 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 	if types.IsSkipRetryError(err) {
 		return false
 	}
+	if err.IsUpstreamBalanceError() {
+		return true
+	}
 	if operation_setting.ShouldDisableByStatusCode(err.StatusCode) {
 		return true
 	}

@@ -27,6 +27,9 @@ func OaiResponsesCompactionHandler(c *gin.Context, resp *http.Response) (*dto.Us
 	if oaiError := compactResp.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
+	if upstreamErr := service.UpstreamPayloadError(responseBody, ""); upstreamErr != nil {
+		return nil, upstreamErr
+	}
 
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 

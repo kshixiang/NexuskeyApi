@@ -239,6 +239,9 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		taskErr = service.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
 		return
 	}
+	if dResp.Error != nil {
+		return "", nil, service.TaskErrorWrapper(fmt.Errorf("upstream video error (%s): %s", dResp.Error.Code, dResp.Error.Message), dResp.Error.Code, http.StatusBadGateway)
+	}
 
 	upstreamID := dResp.ID
 	if upstreamID == "" {

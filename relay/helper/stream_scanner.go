@@ -14,7 +14,9 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
 
@@ -34,7 +36,7 @@ func getScannerBufferSize() int {
 	return DefaultMaxScannerBufferSize
 }
 
-func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo, dataHandler func(data string, sr *StreamResult)) {
+func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo, dataHandler func(data string, sr *StreamResult)) (upstreamErr *types.NewAPIError) {
 
 	if resp == nil || dataHandler == nil {
 		return
@@ -54,6 +56,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 
 	var (
 		stopChan   = make(chan bool, 3) // 增加缓冲区避免阻塞
+		errorChan  = make(chan *types.NewAPIError, 1)
 		scanner    = bufio.NewScanner(resp.Body)
 		ticker     = time.NewTicker(streamingTimeout)
 		pingTicker *time.Ticker
@@ -102,6 +105,10 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 		case <-done:
 		case <-time.After(5 * time.Second):
 			logger.LogError(c, "timeout waiting for goroutines to exit")
+		}
+		select {
+		case upstreamErr = <-errorChan:
+		default:
 		}
 
 		close(stopChan)
@@ -222,6 +229,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 			}
 		}()
 
+		var event string
 		for scanner.Scan() {
 			// 检查是否需要停止
 			select {
@@ -241,6 +249,13 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				println(data)
 			}
 
+			if data == "" {
+				event = ""
+			}
+			if strings.HasPrefix(data, "event:") {
+				event = strings.TrimSpace(strings.TrimPrefix(data, "event:"))
+				continue
+			}
 			if len(data) < 6 {
 				continue
 			}
@@ -253,6 +268,13 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				continue
 			}
 			if !strings.HasPrefix(data, "[DONE]") {
+				if event == "error" || strings.Contains(data, "error") || strings.Contains(data, `"Error"`) || strings.Contains(data, "fail") || strings.Contains(data, `\u`) {
+					if err := service.UpstreamPayloadError([]byte(data), event); err != nil {
+						info.StreamStatus.SetEndReason(relaycommon.StreamEndReasonHandlerStop, err)
+						errorChan <- err
+						return
+					}
+				}
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
 
@@ -296,4 +318,5 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 	} else {
 		logger.LogError(c, fmt.Sprintf("stream ended: %s, received=%d", info.StreamStatus.Summary(), info.ReceivedResponseCount))
 	}
+	return
 }

@@ -94,6 +94,17 @@ func TestStreamScannerHandler_EmptyBody(t *testing.T) {
 	assert.False(t, called.Load(), "handler should not be called for empty body")
 }
 
+func TestStreamScannerHandlerStopsBeforePassingUpstreamErrorToAdapter(t *testing.T) {
+	c, resp, info := setupStreamTest(t, strings.NewReader("data: first\n\nevent: error\ndata: {\"message\":\"private upstream details\"}\n\ndata: last\n\n"))
+	var chunks []string
+	err := StreamScannerHandler(c, resp, info, func(data string, sr *StreamResult) {
+		chunks = append(chunks, data)
+	})
+	require.NotNil(t, err)
+	require.Contains(t, err.Error(), "private upstream details")
+	require.Equal(t, []string{"first"}, chunks)
+}
+
 func TestStreamScannerHandler_1000Chunks(t *testing.T) {
 	t.Parallel()
 

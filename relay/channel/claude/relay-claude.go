@@ -939,12 +939,14 @@ func ClaudeStreamHandler(c *gin.Context, resp *http.Response, info *relaycommon.
 		Usage:        &dto.Usage{},
 	}
 	var err *types.NewAPIError
-	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
+	if streamErr := helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		err = HandleStreamResponseData(c, info, claudeInfo, data)
 		if err != nil {
 			sr.Stop(err)
 		}
-	})
+	}); streamErr != nil {
+		return nil, streamErr
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -961,6 +963,9 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 	}
 	if claudeError := claudeResponse.GetClaudeError(); claudeError != nil && claudeError.Type != "" {
 		return types.WithClaudeError(*claudeError, http.StatusInternalServerError)
+	}
+	if upstreamErr := service.UpstreamPayloadError(data, ""); upstreamErr != nil {
+		return upstreamErr
 	}
 	maybeMarkClaudeRefusal(c, claudeResponse.StopReason)
 	if claudeInfo.Usage == nil {

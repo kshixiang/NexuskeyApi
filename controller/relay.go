@@ -72,8 +72,9 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	//originalModel := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
 
 	var (
-		newAPIError *types.NewAPIError
-		ws          *websocket.Conn
+		newAPIError     *types.NewAPIError
+		upstreamFailure bool
+		ws              *websocket.Conn
 	)
 
 	if relayFormat == types.RelayFormatOpenAIRealtime {
@@ -89,19 +90,17 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	defer func() {
 		if newAPIError != nil {
 			logger.LogError(c, fmt.Sprintf("relay error: %s", newAPIError.Error()))
-			newAPIError.SetMessage(common.MessageWithRequestId(newAPIError.Error(), requestId))
+			responseErr := newAPIError
+			if upstreamFailure {
+				responseErr = types.NewUpstreamUnavailableError(requestId)
+			} else {
+				responseErr.SetMessage(common.MessageWithRequestId(responseErr.Error(), requestId))
+			}
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
-				helper.WssError(c, ws, newAPIError.ToOpenAIError())
-			case types.RelayFormatClaude:
-				c.JSON(newAPIError.StatusCode, gin.H{
-					"type":  "error",
-					"error": newAPIError.ToClaudeError(),
-				})
+				helper.WssError(c, ws, responseErr.ToOpenAIError())
 			default:
-				c.JSON(newAPIError.StatusCode, gin.H{
-					"error": newAPIError.ToOpenAIError(),
-				})
+				writeRelayError(c, relayFormat, responseErr)
 			}
 		}
 	}()
@@ -200,6 +199,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		addUsedChannel(c, channel.Id)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
+			upstreamFailure = false
 			// Ensure consistent 413 for oversized bodies even when error occurs later (e.g., retry path)
 			if common.IsRequestBodyTooLargeError(bodyErr) || errors.Is(bodyErr, common.ErrRequestBodyTooLarge) {
 				newAPIError = types.NewErrorWithStatusCode(bodyErr, types.ErrorCodeReadRequestBodyFailed, http.StatusRequestEntityTooLarge, types.ErrOptionWithSkipRetry())
@@ -226,12 +226,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			return
 		}
 
+		upstreamFailure = isUpstreamRelayError(newAPIError)
 		newAPIError = service.NormalizeViolationFeeError(newAPIError)
 		relayInfo.LastError = newAPIError
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
 
-		if !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
+		if c.Writer.Written() || !shouldRetry(c, newAPIError, common.RetryTimes-retryParam.GetRetry()) {
 			break
 		}
 	}
@@ -245,6 +246,46 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		gopool.Go(func() {
 			perfmetrics.RecordRelaySample(relayInfo, false, 0)
 		})
+	}
+}
+
+func isUpstreamRelayError(err *types.NewAPIError) bool {
+	if err.GetErrorType() == types.ErrorTypeNewAPIError {
+		switch err.GetErrorCode() {
+		case types.ErrorCodeInvalidRequest, types.ErrorCodeConvertRequestFailed, types.ErrorCodeReadRequestBodyFailed,
+			types.ErrorCodeModelPriceError, types.ErrorCodeInsufficientUserQuota, types.ErrorCodePreConsumeTokenQuotaFailed:
+			return false
+		}
+	}
+	return true
+}
+
+func writeRelayError(c *gin.Context, format types.RelayFormat, err *types.NewAPIError) {
+	payload := gin.H{"error": err.ToOpenAIError()}
+	if format == types.RelayFormatClaude {
+		payload = gin.H{"type": "error", "error": err.ToClaudeError()}
+	}
+	if !c.Writer.Written() {
+		c.Header("Content-Length", "")
+		c.Header("Transfer-Encoding", "")
+		c.Header("Content-Type", "application/json; charset=utf-8")
+		c.JSON(err.StatusCode, payload)
+		return
+	}
+	if !strings.HasPrefix(c.Writer.Header().Get("Content-Type"), "text/event-stream") {
+		return
+	}
+	switch format {
+	case types.RelayFormatClaude:
+		_ = helper.ClaudeData(c, dto.ClaudeResponse{Type: "error", Error: err.ToClaudeError()})
+	case types.RelayFormatOpenAIResponses:
+		openAIError := err.ToOpenAIError()
+		data, marshalErr := common.Marshal(gin.H{"type": "error", "code": openAIError.Code, "message": openAIError.Message, "param": nil})
+		if marshalErr == nil {
+			helper.ResponseChunkData(c, dto.ResponsesStreamResponse{Type: "error"}, string(data))
+		}
+	default:
+		_ = helper.ObjectData(c, payload)
 	}
 }
 
@@ -386,6 +427,9 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		other["error_type"] = err.GetErrorType()
 		other["error_code"] = err.GetErrorCode()
 		other["status_code"] = err.StatusCode
+		if err.IsUpstreamBalanceError() {
+			other["error_type"] = err.ToOpenAIError().Type
+		}
 		other["channel_id"] = channelId
 		other["channel_name"] = c.GetString("channel_name")
 		other["channel_type"] = c.GetInt("channel_type")
@@ -436,6 +480,15 @@ func RelayMidjourney(c *gin.Context) {
 	//err = relayMidjourneySubmit(c, relayMode)
 	log.Println(mjErr)
 	if mjErr != nil {
+		if mjErr.Upstream {
+			responseErr := types.NewUpstreamUnavailableError(c.GetString(common.RequestIdKey))
+			c.JSON(responseErr.StatusCode, gin.H{
+				"description": responseErr.Error(),
+				"type":        responseErr.GetErrorCode(),
+				"code":        constant.MjRequestError,
+			})
+			return
+		}
 		statusCode := http.StatusBadRequest
 		if mjErr.Code == 30 {
 			mjErr.Result = "当前分组负载已饱和，请稍后再试，或升级账户以提升服务质量。"
@@ -612,6 +665,12 @@ func RelayTask(c *gin.Context) {
 
 // respondTaskError 统一输出 Task 错误响应（含 429 限流提示改写）
 func respondTaskError(c *gin.Context, taskErr *dto.TaskError) {
+	if taskErr.Upstream {
+		logger.LogError(c, fmt.Sprintf("upstream task error (status code: %d, code: %s): %s", taskErr.StatusCode, taskErr.Code, taskErr.Message))
+		responseErr := types.NewUpstreamUnavailableError(c.GetString(common.RequestIdKey))
+		c.JSON(responseErr.StatusCode, &dto.TaskError{Code: string(responseErr.GetErrorCode()), Message: responseErr.Error()})
+		return
+	}
 	if taskErr.StatusCode == http.StatusTooManyRequests {
 		taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
 	}

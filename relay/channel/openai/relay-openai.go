@@ -126,7 +126,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	// 检查是否为音频模型
 	isAudioModel := strings.Contains(strings.ToLower(model), "audio")
 
-	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
+	if streamErr := helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		if lastStreamData != "" {
 			if err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
 				common.SysLog("error handling stream format: " + err.Error())
@@ -142,7 +142,9 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			lastStreamData = data
 			streamItems = append(streamItems, data)
 		}
-	})
+	}); streamErr != nil {
+		return nil, streamErr
+	}
 
 	// 对音频模型，从倒数第二个stream data中提取usage信息
 	if isAudioModel && secondLastStreamData != "" {
@@ -226,6 +228,9 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 
 	if oaiError := simpleResponse.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	}
+	if upstreamErr := service.UpstreamPayloadError(responseBody, ""); upstreamErr != nil {
+		return nil, upstreamErr
 	}
 
 	for _, choice := range simpleResponse.Choices {
@@ -431,6 +436,11 @@ func OpenaiRealtimeHandler(c *gin.Context, info *relaycommon.RelayInfo) (*types.
 					return
 				}
 				info.SetFirstResponseTime()
+				if upstreamErr := service.UpstreamPayloadError(message, ""); upstreamErr != nil {
+					logger.LogError(c, "upstream realtime error: "+upstreamErr.Error())
+					helper.WssError(c, clientConn, types.NewUpstreamUnavailableError(c.GetString(common.RequestIdKey)).ToOpenAIError())
+					continue
+				}
 				realtimeEvent := &dto.RealtimeEvent{}
 				err = common.Unmarshal(message, realtimeEvent)
 				if err != nil {
@@ -572,6 +582,9 @@ func OpenaiHandlerWithUsage(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	}
 
 	// 写入新的 response body
+	if upstreamErr := service.UpstreamPayloadError(responseBody, ""); upstreamErr != nil {
+		return nil, upstreamErr
+	}
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	// Once we've written to the client, we should not return errors anymore

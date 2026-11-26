@@ -39,11 +39,15 @@ func GeminiTextGenerationHandler(c *gin.Context, info *relaycommon.RelayInfo, re
 
 	if len(geminiResponse.Candidates) == 0 && geminiResponse.PromptFeedback != nil && geminiResponse.PromptFeedback.BlockReason != nil {
 		common.SetContextKey(c, constant.ContextKeyAdminRejectReason, fmt.Sprintf("gemini_block_reason=%s", *geminiResponse.PromptFeedback.BlockReason))
+		return nil, types.NewOpenAIError(fmt.Errorf("request blocked by Gemini API: %s", *geminiResponse.PromptFeedback.BlockReason), types.ErrorCodePromptBlocked, http.StatusBadRequest)
 	}
 
 	// 计算使用量（基于 UsageMetadata）
 	usage := buildUsageFromGeminiMetadata(geminiResponse.UsageMetadata, info.GetEstimatePromptTokens())
 
+	if upstreamErr := service.UpstreamPayloadError(responseBody, ""); upstreamErr != nil {
+		return nil, upstreamErr
+	}
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return &usage, nil
@@ -77,6 +81,9 @@ func NativeGeminiEmbeddingHandler(c *gin.Context, resp *http.Response, info *rel
 		}
 	}
 
+	if upstreamErr := service.UpstreamPayloadError(responseBody, ""); upstreamErr != nil {
+		return nil, upstreamErr
+	}
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
 	return usage, nil

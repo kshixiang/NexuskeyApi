@@ -182,6 +182,9 @@ func handleChatCompletionResponse(c *gin.Context, resp *http.Response, info *rel
 	}
 	defer resp.Body.Close()
 
+	if upstreamErr := service.UpstreamPayloadError(body, ""); upstreamErr != nil {
+		return nil, upstreamErr
+	}
 	// Set response headers
 	for key, values := range resp.Header {
 		for _, value := range values {

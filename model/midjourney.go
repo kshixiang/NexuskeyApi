@@ -25,6 +25,11 @@ type Midjourney struct {
 	Properties  string `json:"properties"`
 }
 
+func (task *Midjourney) HasFailure() bool {
+	return task.Status == "FAILURE" || task.FailReason != "" ||
+		(task.Code != 0 && task.Code != 1 && task.Code != 21 && task.Code != 22)
+}
+
 // TaskQueryParams 用于包含所有搜索条件的结构体，可以根据需求添加更多字段
 type TaskQueryParams struct {
 	ChannelID      string

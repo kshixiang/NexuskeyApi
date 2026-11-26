@@ -21,6 +21,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -58,16 +59,17 @@ func RelayMidjourneyImage(c *gin.Context) {
 	}
 	resp, err := httpClient.Get(midjourneyTask.ImageUrl)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "http_get_image_failed",
+		logger.LogError(c, "upstream Midjourney image request failed: "+err.Error())
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": types.UpstreamUnavailableMessage,
 		})
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		responseBody, _ := io.ReadAll(resp.Body)
-		c.JSON(resp.StatusCode, gin.H{
-			"error": string(responseBody),
+		logger.LogError(c, fmt.Sprintf("upstream Midjourney image status: %d", resp.StatusCode))
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": types.UpstreamUnavailableMessage,
 		})
 		return
 	}
@@ -154,6 +156,13 @@ func coverMidjourneyTaskDto(c *gin.Context, originTask *model.Midjourney) (midjo
 	midjourneyTask.FailReason = originTask.FailReason
 	midjourneyTask.Action = originTask.Action
 	midjourneyTask.Description = originTask.Description
+	if originTask.HasFailure() {
+		midjourneyTask.FailReason = types.UpstreamUnavailableMessage
+		midjourneyTask.Description = types.UpstreamUnavailableMessage
+		midjourneyTask.Action = originTask.Action
+		midjourneyTask.Prompt = originTask.Prompt
+		return
+	}
 	midjourneyTask.Prompt = originTask.Prompt
 	if originTask.Buttons != "" {
 		var buttons []dto.ActionButton
@@ -219,7 +228,8 @@ func RelaySwapFace(c *gin.Context, info *relaycommon.RelayInfo) *dto.MidjourneyR
 	baseURL := c.GetString("base_url")
 	fullRequestURL := fmt.Sprintf("%s%s", baseURL, requestURL)
 	mjResp, _, err := service.DoMidjourneyHttpRequest(c, time.Second*60, fullRequestURL)
-	if err != nil {
+	if err != nil || mjResp.StatusCode != http.StatusOK || mjResp.Response.Code != 1 {
+		mjResp.Response.Upstream = true
 		return &mjResp.Response
 	}
 	defer func() {
@@ -302,7 +312,8 @@ func RelayMidjourneyTaskImageSeed(c *gin.Context) *dto.MidjourneyResponse {
 	requestURL := getMjRequestPath(c.Request.URL.String())
 	fullRequestURL := fmt.Sprintf("%s%s", channel.GetBaseURL(), requestURL)
 	midjResponseWithStatus, _, err := service.DoMidjourneyHttpRequest(c, time.Second*30, fullRequestURL)
-	if err != nil {
+	if err != nil || midjResponseWithStatus.StatusCode != http.StatusOK || midjResponseWithStatus.Response.Code != 1 {
+		midjResponseWithStatus.Response.Upstream = true
 		return &midjResponseWithStatus.Response
 	}
 	midjResponse := &midjResponseWithStatus.Response
@@ -524,7 +535,8 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 	}
 
 	midjResponseWithStatus, responseBody, err := service.DoMidjourneyHttpRequest(c, time.Second*60, fullRequestURL)
-	if err != nil {
+	if err != nil || midjResponseWithStatus.StatusCode != http.StatusOK {
+		midjResponseWithStatus.Response.Upstream = true
 		return &midjResponseWithStatus.Response
 	}
 	midjResponse := &midjResponseWithStatus.Response
@@ -585,7 +597,7 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 		if err != nil {
 			common.SysLog("get_channel_null: " + err.Error())
 		}
-		if channel.GetAutoBan() && common.AutomaticDisableChannelEnabled {
+		if channel != nil && channel.GetAutoBan() && common.AutomaticDisableChannelEnabled {
 			model.UpdateChannelStatus(midjourneyTask.ChannelId, "", 2, "No available account instance")
 		}
 	}
@@ -628,6 +640,10 @@ func RelayMidjourneySubmit(c *gin.Context, relayInfo *relaycommon.RelayInfo) *dt
 			Code:        4,
 			Description: "insert_midjourney_task_failed",
 		}
+	}
+	if midjourneyTask.FailReason != "" || (midjResponse.Code != 1 && midjResponse.Code != 21 && midjResponse.Code != 22) {
+		midjResponse.Upstream = true
+		return midjResponse
 	}
 
 	if midjResponse.Code == 22 { //22-排队中，说明任务已存在

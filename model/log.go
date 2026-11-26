@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -51,18 +52,24 @@ const (
 )
 
 func formatUserLogs(logs []*Log, startIdx int) {
-	for i := range logs {
-		logs[i].ChannelName = ""
-		var otherMap map[string]interface{}
-		otherMap, _ = common.StrToMap(logs[i].Other)
-		if otherMap != nil {
-			// Remove admin-only debug fields.
-			delete(otherMap, "admin_info")
-			// delete(otherMap, "reject_reason")
-			delete(otherMap, "stream_status")
+	for i, log := range logs {
+		log.ChannelName = ""
+		otherMap, _ := common.StrToMap(log.Other)
+		// Remove admin-only debug fields.
+		delete(otherMap, "admin_info")
+		delete(otherMap, "stream_status")
+		delete(otherMap, "upstream_error_type")
+		delete(otherMap, "upstream_error_code")
+		if log.Type == LogTypeError {
+			log.Content = types.UpstreamUnavailableMessage
+			otherMap = map[string]interface{}{
+				"error_type":  types.ErrorCodeUpstreamUnavailable,
+				"error_code":  types.ErrorCodeUpstreamUnavailable,
+				"status_code": http.StatusServiceUnavailable,
+			}
 		}
-		logs[i].Other = common.MapToJsonStr(otherMap)
-		logs[i].Id = startIdx + i + 1
+		log.Other = common.MapToJsonStr(otherMap)
+		log.Id = startIdx + i + 1
 	}
 }
 

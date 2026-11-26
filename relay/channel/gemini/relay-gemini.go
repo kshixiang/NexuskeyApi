@@ -1273,9 +1273,10 @@ func handleFinalStream(c *gin.Context, info *relaycommon.RelayInfo, resp *dto.Ch
 func geminiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response, callback func(data string, geminiResponse *dto.GeminiChatResponse) bool) (*dto.Usage, *types.NewAPIError) {
 	var usage = &dto.Usage{}
 	var imageCount int
+	var blockedErr *types.NewAPIError
 	responseText := strings.Builder{}
 
-	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
+	if streamErr := helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		var geminiResponse dto.GeminiChatResponse
 		if err := common.UnmarshalJsonStr(data, &geminiResponse); err != nil {
 			sr.Stop(fmt.Errorf("unmarshal: %w", err))
@@ -1284,6 +1285,9 @@ func geminiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 
 		if len(geminiResponse.Candidates) == 0 && geminiResponse.PromptFeedback != nil && geminiResponse.PromptFeedback.BlockReason != nil {
 			common.SetContextKey(c, constant.ContextKeyAdminRejectReason, fmt.Sprintf("gemini_block_reason=%s", *geminiResponse.PromptFeedback.BlockReason))
+			blockedErr = types.NewOpenAIError(fmt.Errorf("request blocked by Gemini API: %s", *geminiResponse.PromptFeedback.BlockReason), types.ErrorCodePromptBlocked, http.StatusBadRequest)
+			sr.Stop(blockedErr)
+			return
 		}
 
 		// 统计图片数量
@@ -1307,7 +1311,12 @@ func geminiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 		if !callback(data, &geminiResponse) {
 			sr.Stop(fmt.Errorf("gemini callback stopped"))
 		}
-	})
+	}); streamErr != nil {
+		return nil, streamErr
+	}
+	if blockedErr != nil {
+		return nil, blockedErr
+	}
 
 	if imageCount != 0 {
 		if usage.CompletionTokens == 0 {
@@ -1425,6 +1434,9 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 	if common.DebugEnabled {
 		println(string(responseBody))
 	}
+	if upstreamErr := service.UpstreamPayloadError(responseBody, ""); upstreamErr != nil {
+		return nil, upstreamErr
+	}
 	var geminiResponse dto.GeminiChatResponse
 	err = common.Unmarshal(responseBody, &geminiResponse)
 	if err != nil {
@@ -1450,18 +1462,12 @@ func GeminiChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 			)
 		}
 
-		service.ResetStatusCode(newAPIError, c.GetString("status_code_mapping"))
-
-		switch info.RelayFormat {
-		case types.RelayFormatClaude:
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"type":  "error",
-				"error": newAPIError.ToClaudeError(),
-			})
-		default:
-			c.JSON(newAPIError.StatusCode, gin.H{
-				"error": newAPIError.ToOpenAIError(),
-			})
+		logger.LogError(c, newAPIError.ErrorWithStatusCode())
+		publicErr := types.NewUpstreamUnavailableError(c.GetString(common.RequestIdKey))
+		if info.RelayFormat == types.RelayFormatClaude {
+			c.JSON(publicErr.StatusCode, gin.H{"type": "error", "error": publicErr.ToClaudeError()})
+		} else {
+			c.JSON(publicErr.StatusCode, gin.H{"error": publicErr.ToOpenAIError()})
 		}
 		return &usage, nil
 	}

@@ -73,6 +73,7 @@ const (
 	ErrorCodeBadResponseStatusCode  ErrorCode = "bad_response_status_code"
 	ErrorCodeBadResponse            ErrorCode = "bad_response"
 	ErrorCodeBadResponseBody        ErrorCode = "bad_response_body"
+	ErrorCodeUpstreamUnavailable    ErrorCode = "upstream_unavailable"
 	ErrorCodeEmptyResponse          ErrorCode = "empty_response"
 	ErrorCodeAwsInvokeError         ErrorCode = "aws_invoke_error"
 	ErrorCodeModelNotFound          ErrorCode = "model_not_found"
@@ -86,6 +87,16 @@ const (
 	ErrorCodeInsufficientUserQuota      ErrorCode = "insufficient_user_quota"
 	ErrorCodePreConsumeTokenQuotaFailed ErrorCode = "pre_consume_token_quota_failed"
 )
+
+const UpstreamUnavailableMessage = "The model service is temporarily unavailable. Please try again later."
+
+func NewUpstreamUnavailableError(requestID string) *NewAPIError {
+	message := UpstreamUnavailableMessage
+	if requestID != "" {
+		message = common.MessageWithRequestId(message, requestID)
+	}
+	return NewOpenAIError(errors.New(message), ErrorCodeUpstreamUnavailable, http.StatusServiceUnavailable)
+}
 
 type NewAPIError struct {
 	Err            error
@@ -368,6 +379,33 @@ func IsChannelError(err *NewAPIError) bool {
 		return false
 	}
 	return strings.HasPrefix(string(err.errorCode), "channel:")
+}
+
+// IsUpstreamBalanceError identifies provider account billing failures in relay errors and logs.
+func IsUpstreamBalanceError(message, errorType, errorCode string) bool {
+	for _, value := range [...]string{errorType, errorCode} {
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "insufficient account balance", "insufficient_balance", "insufficient_quota", "billing_hard_limit_reached":
+			return true
+		}
+	}
+	message = strings.ToLower(message)
+	return strings.Contains(message, "insufficient account balance") || strings.Contains(message, "your credit balance is too low")
+}
+
+func (e *NewAPIError) IsUpstreamBalanceError() bool {
+	if e == nil {
+		return false
+	}
+	switch e.errorType {
+	case ErrorTypeOpenAIError:
+		upstreamError, _ := e.RelayError.(OpenAIError)
+		return IsUpstreamBalanceError(e.Error(), upstreamError.Type, string(e.errorCode))
+	case ErrorTypeClaudeError:
+		return IsUpstreamBalanceError(e.Error(), "", string(e.errorCode))
+	default:
+		return false
+	}
 }
 
 func IsSkipRetryError(err *NewAPIError) bool {

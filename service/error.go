@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,48 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/types"
 )
+
+// UpstreamPayloadError recognizes error envelopes carried in an otherwise successful response.
+func UpstreamPayloadError(data []byte, event string) *types.NewAPIError {
+	var payload struct {
+		Type     string          `json:"type"`
+		Event    string          `json:"event"`
+		Object   string          `json:"object"`
+		Status   json.RawMessage `json:"status"`
+		Error    json.RawMessage `json:"error"`
+		Response json.RawMessage `json:"response"`
+	}
+	if common.Unmarshal(data, &payload) != nil && event != "error" {
+		return nil
+	}
+	var response struct {
+		Status json.RawMessage `json:"status"`
+		Error  json.RawMessage `json:"error"`
+	}
+	if len(payload.Response) > 0 {
+		_ = common.Unmarshal(payload.Response, &response)
+	}
+	for _, field := range []json.RawMessage{payload.Error, response.Error} {
+		if len(field) == 0 || bytes.Equal(field, []byte("null")) || bytes.Equal(field, []byte(`""`)) {
+			continue
+		}
+		var upstreamError types.OpenAIError
+		if common.Unmarshal(field, &upstreamError) == nil {
+			if upstreamError.Message == "" {
+				upstreamError.Message = string(field)
+			}
+			return types.WithOpenAIError(upstreamError, http.StatusBadGateway)
+		}
+		return types.NewOpenAIError(errors.New(string(field)), types.ErrorCodeBadResponse, http.StatusBadGateway)
+	}
+	if event == "error" || payload.Type == "error" || payload.Event == "error" ||
+		payload.Type == "response.error" || payload.Type == "response.failed" ||
+		(payload.Type == "response.done" && bytes.Equal(response.Status, []byte(`"failed"`))) ||
+		(payload.Object == "response" && bytes.Equal(payload.Status, []byte(`"failed"`))) {
+		return types.NewOpenAIError(errors.New(string(data)), types.ErrorCodeBadResponse, http.StatusBadGateway)
+	}
+	return nil
+}
 
 func MidjourneyErrorWrapper(code int, desc string) *dto.MidjourneyResponse {
 	return &dto.MidjourneyResponse{
@@ -101,7 +144,7 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 
 	err = common.Unmarshal(responseBody, &errResponse)
 	if err != nil {
-		if showBodyWhenFail {
+		if showBodyWhenFail || (resp.StatusCode == http.StatusTooManyRequests && types.IsUpstreamBalanceError(string(responseBody), "", "")) {
 			newApiErr.Err = buildErrWithBody("")
 		} else {
 			logger.LogError(ctx, fmt.Sprintf("bad response status code %d, body: %s", resp.StatusCode, string(responseBody)))
