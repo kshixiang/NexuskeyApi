@@ -232,6 +232,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           {primaryGroup && (
             <span className='text-muted-foreground text-xs font-medium'>
               {props.model.sale_group_name ?? primaryGroup} {t('Groups')}
+              {props.model.sale_group_multiplier != null &&
+                ' · ' + props.model.sale_group_multiplier + 'x'}
             </span>
           )}
           <span className='text-muted-foreground text-xs font-medium'>

@@ -27,6 +27,7 @@ import SelectableButtonGroup from '../../../common/ui/SelectableButtonGroup';
  * @param {Record<string, any>} usableGroup 后端返回的可用分组对象
  * @param {Record<string, number>} groupRatio 分组倍率对象
  * @param {Array} models 模型列表
+ * @param {Array} allModels 用于查找已上架分组倍率的完整模型列表
  * @param {boolean} loading 是否加载中
  * @param {Function} t i18n
  */
@@ -36,6 +37,7 @@ const PricingGroups = ({
   usableGroup = {},
   groupRatio = {},
   models = [],
+  allModels = models,
   loading = false,
   t,
 }) => {
@@ -45,6 +47,7 @@ const PricingGroups = ({
   ];
 
   const items = groups.map((g) => {
+    const saleModel = allModels.find((model) => model.sale_group === g);
     const modelCount =
       g === 'all'
         ? models.length
@@ -54,7 +57,7 @@ const PricingGroups = ({
     if (g === 'all') {
       // ratioDisplay = t('全部');
     } else {
-      const ratio = groupRatio[g];
+      const ratio = saleModel?.sale_group_multiplier ?? groupRatio[g];
       if (ratio !== undefined && ratio !== null) {
         ratioDisplay = `${ratio}x`;
       } else {
@@ -63,7 +66,7 @@ const PricingGroups = ({
     }
     return {
       value: g,
-      label: g === 'all' ? t('全部分组') : g,
+      label: g === 'all' ? t('全部分组') : (saleModel?.sale_group_name ?? g),
       tagCount: ratioDisplay,
     };
   });

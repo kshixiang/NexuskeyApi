@@ -88,7 +88,7 @@ const renderStatus = (text, record, t) => {
 };
 
 // Render group column
-const renderGroupColumn = (text, record, t, groupRatios = {}) => {
+const renderGroupColumn = (text, record, t, userGroups) => {
   if (text === 'auto') {
     return (
       <Tooltip
@@ -104,10 +104,12 @@ const renderGroupColumn = (text, record, t, groupRatios = {}) => {
       </Tooltip>
     );
   }
-  const ratio = groupRatios[text];
+  const info = userGroups[text];
+  const ratio = info?.ratio;
+  const label = text?.startsWith('upstream-sale-') ? info?.desc : undefined;
   return (
     <span className='flex items-center gap-1'>
-      {renderGroup(text)}
+      {renderGroup(label || text)}
       {ratio !== undefined && (
         <Tag size='small' color='green' shape='circle'>
           {ratio}x
@@ -479,7 +481,7 @@ export const getTokensColumns = ({
   setEditingToken,
   setShowEdit,
   refresh,
-  groupRatios = {},
+  userGroups = {},
 }) => {
   return [
     {
@@ -501,7 +503,7 @@ export const getTokensColumns = ({
       title: t('分组'),
       dataIndex: 'group',
       key: 'group',
-      render: (text, record) => renderGroupColumn(text, record, t, groupRatios),
+      render: (text, record) => renderGroupColumn(text, record, t, userGroups),
     },
     {
       title: t('密钥'),

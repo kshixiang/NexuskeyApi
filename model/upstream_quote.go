@@ -19,20 +19,21 @@ type UpstreamQuoteChannel struct {
 }
 
 type UpstreamQuoteGroup struct {
-	ID            int     `json:"id"`
-	ChannelID     int     `json:"channel_id" gorm:"uniqueIndex:idx_upstream_group_source;not null"`
-	SourceGroup   string  `json:"source_group" gorm:"size:64;uniqueIndex:idx_upstream_group_source;not null"`
-	OriginalName  string  `json:"original_name"`
-	Name          string  `json:"name"`
-	SalesName     string  `json:"sales_name"`
-	APIKey        string  `json:"-" gorm:"type:text"`
-	KeyHint       string  `json:"key_hint" gorm:"-"`
-	BaseURL       string  `json:"base_url"`
-	Protocol      string  `json:"protocol"`
-	Multiplier    float64 `json:"multiplier"`
-	CreditCost    float64 `json:"credit_cost"`
-	Revision      int     `json:"revision"`
-	ActiveVersion int     `json:"active_version"`
+	ID              int      `json:"id"`
+	ChannelID       int      `json:"channel_id" gorm:"uniqueIndex:idx_upstream_group_source;not null"`
+	SourceGroup     string   `json:"source_group" gorm:"size:64;uniqueIndex:idx_upstream_group_source;not null"`
+	OriginalName    string   `json:"original_name"`
+	Name            string   `json:"name"`
+	SalesName       string   `json:"sales_name"`
+	APIKey          string   `json:"-" gorm:"type:text"`
+	KeyHint         string   `json:"key_hint" gorm:"-"`
+	BaseURL         string   `json:"base_url"`
+	Protocol        string   `json:"protocol"`
+	Multiplier      float64  `json:"multiplier"`
+	FinalMultiplier *float64 `json:"final_multiplier,omitempty"`
+	CreditCost      float64  `json:"credit_cost"`
+	Revision        int      `json:"revision"`
+	ActiveVersion   int      `json:"active_version"`
 }
 
 type UpstreamQuoteModel struct {
@@ -52,13 +53,14 @@ type UpstreamQuoteVersion struct {
 }
 
 type UpstreamSaleVersion struct {
-	ID         int     `json:"id"`
-	GroupID    int     `json:"group_id" gorm:"index;not null"`
-	ChannelID  int     `json:"channel_id"`
-	Markup     float64 `json:"multiplier"`
-	CreditCost float64 `json:"-"`
-	Protocol   string  `json:"-"`
-	CreatedAt  int64   `json:"created_at"`
+	ID              int      `json:"id"`
+	GroupID         int      `json:"group_id" gorm:"index;not null"`
+	ChannelID       int      `json:"channel_id"`
+	Markup          float64  `json:"multiplier"`
+	FinalMultiplier *float64 `json:"final_multiplier,omitempty"`
+	CreditCost      float64  `json:"-"`
+	Protocol        string   `json:"-"`
+	CreatedAt       int64    `json:"created_at"`
 }
 
 type UpstreamSaleModel struct {
@@ -130,18 +132,26 @@ func ResolveUpstreamSaleRoute(group, modelName string) (*UpstreamSaleRoute, erro
 	}, nil
 }
 
-func PublishedUpstreamGroups() map[string]string {
+type PublishedUpstreamGroup struct {
+	Name            string
+	FinalMultiplier *float64
+}
+
+func PublishedUpstreamGroups() map[string]PublishedUpstreamGroup {
 	if DB == nil {
 		return nil
 	}
-	var rows []UpstreamQuoteGroup
-	DB.Table("upstream_quote_groups AS grp").Select("grp.id, grp.sales_name").
+	var rows []struct {
+		ID int
+		PublishedUpstreamGroup
+	}
+	DB.Table("upstream_quote_groups AS grp").Select("grp.id, grp.sales_name AS name, ver.final_multiplier").
 		Joins("JOIN upstream_sale_versions AS ver ON ver.id = grp.active_version").
 		Joins("JOIN channels AS ch ON ch.id = ver.channel_id").
 		Where("ch.status = ?", common.ChannelStatusEnabled).Scan(&rows)
-	groups := make(map[string]string, len(rows))
+	groups := make(map[string]PublishedUpstreamGroup, len(rows))
 	for _, row := range rows {
-		groups[UpstreamSaleGroupKey(row.ID)] = row.SalesName
+		groups[UpstreamSaleGroupKey(row.ID)] = row.PublishedUpstreamGroup
 	}
 	return groups
 }
@@ -167,12 +177,14 @@ func PublishedUpstreamPricing() ([]Pricing, error) {
 		UpstreamSaleModel `gorm:"embedded"`
 		GroupID           int
 		SalesName         string
+		FinalMultiplier   *float64
 	}
-	err := activeUpstreamSaleModels().Select("sale.*, grp.id AS group_id, grp.sales_name").Order("grp.id, sale.model_name").Scan(&rows).Error
+	err := activeUpstreamSaleModels().Select("sale.*, grp.id AS group_id, grp.sales_name, ver.final_multiplier").Order("grp.id, sale.model_name").Scan(&rows).Error
 	prices := make([]Pricing, 0, len(rows))
 	for _, row := range rows {
 		group := UpstreamSaleGroupKey(row.GroupID)
 		price := Pricing{ModelName: row.ModelName, EnableGroup: []string{group}, SaleGroup: group, SaleGroupName: row.SalesName}
+		price.SaleGroupMultiplier = row.FinalMultiplier
 		for _, endpoint := range strings.Split(row.Endpoints, ",") {
 			price.SupportedEndpointTypes = append(price.SupportedEndpointTypes, constant.EndpointType(endpoint))
 		}

@@ -131,6 +131,7 @@ func loadPublishedComparison(version int, name string, group *model.UpstreamQuot
 			return nil, err
 		}
 		group.Multiplier, group.CreditCost, group.Protocol = row.Markup, row.CreditCost, row.Protocol
+		group.FinalMultiplier = nil // Use the frozen published price.
 		result = append(result, UpstreamQuotePreview{Quote: quote, Sale: &row.UpstreamSaleModel})
 	}
 	return result, err
@@ -216,9 +217,15 @@ func evaluateUpstreamComparison(group model.UpstreamQuoteGroup, quote UpstreamQu
 	default:
 		return errors.New("unknown quote meter")
 	}
-	row.Sale = row.Cost * group.Multiplier
 	if input.Sale != nil {
 		row.Sale = *input.Sale
+	} else {
+		_, applied := upstreamQuoteMultipliers(quote)
+		adjustment, err := upstreamSalesAdjustment(group, group.Multiplier, applied)
+		if err != nil {
+			return err
+		}
+		row.Sale = multiplyUpstreamAmount(row.Cost, adjustment)
 	}
 	if row.Sale > 0 {
 		margin := (row.Sale - row.Cost) / row.Sale
@@ -278,6 +285,64 @@ func multiplyUpstreamAmount(price, factor float64) float64 {
 	return decimal.NewFromFloat(price).Mul(decimal.NewFromFloat(factor)).InexactFloat64()
 }
 
+// Imported quotes already include the upstream rate. Recover it from the source
+// snapshot, including snapshots saved before final multipliers were supported.
+func upstreamQuoteMultipliers(quote UpstreamQuote) (group, applied *float64) {
+	var source struct {
+		Group *float64 `json:"group_multiplier"`
+		Model struct {
+			Rate *float64 `json:"rate_multiplier"`
+		} `json:"model"`
+	}
+	if len(quote.Reference) == 0 || common.Unmarshal(quote.Reference, &source) != nil {
+		return nil, nil
+	}
+	if source.Model.Rate != nil {
+		return source.Group, source.Model.Rate
+	}
+	return source.Group, source.Group
+}
+
+type upstreamGroupMultipliers struct {
+	rate       *float64
+	observedAt int64
+	mixed      bool
+}
+
+func (m *upstreamGroupMultipliers) add(rate *float64, observedAt int64) {
+	if rate == nil || observedAt < m.observedAt {
+		return
+	}
+	if observedAt > m.observedAt {
+		*m = upstreamGroupMultipliers{rate: rate, observedAt: observedAt}
+	} else if m.rate != nil && *m.rate != *rate {
+		m.mixed = true
+	} else {
+		m.rate = rate
+	}
+}
+
+func (m upstreamGroupMultipliers) common() *float64 {
+	if m.mixed || m.rate == nil || *m.rate <= 0 || !validUpstreamAmount(*m.rate) {
+		return nil
+	}
+	return m.rate
+}
+
+func upstreamSalesAdjustment(group model.UpstreamQuoteGroup, markup float64, applied *float64) (float64, error) {
+	if group.FinalMultiplier == nil {
+		return markup, nil
+	}
+	if applied == nil || *applied <= 0 || !validUpstreamAmount(*applied) {
+		return 0, errors.New("a positive upstream multiplier is required to calculate the final sale price")
+	}
+	adjustment := *group.FinalMultiplier / *applied
+	if math.IsInf(adjustment, 0) {
+		return 0, errors.New("invalid sales multiplier")
+	}
+	return adjustment, nil
+}
+
 func upstreamCostFactor(group model.UpstreamQuoteGroup, unit string) (float64, error) {
 	switch unit {
 	case "usd":
@@ -332,6 +397,15 @@ func upstreamTokenExpression(tiers []UpstreamTier, factor float64, protocol stri
 	var dimensions [3]bool
 	for i := len(tiers) - 1; i >= 0; i-- {
 		tier := tiers[i]
+		if protocol == "openai" && tier.Cache1h != nil {
+			writePrice := 0.0
+			if tier.CacheWrite != nil {
+				writePrice = *tier.CacheWrite
+			}
+			if *tier.Cache1h != writePrice {
+				return "", errors.New("OpenAI cache write prices must match across cache durations")
+			}
+		}
 		amounts := []*float64{tier.Input, tier.Output, tier.CacheRead, tier.CacheWrite, tier.Cache1h}
 		variables := []string{"p", "c", "cr", "cc", "cc1h"}
 		terms := make([]string, 0, len(amounts))
@@ -348,9 +422,6 @@ func upstreamTokenExpression(tiers []UpstreamTier, factor float64, protocol stri
 			}
 			if amount == nil || !validUpstreamAmount(*amount) || !validUpstreamAmount(*amount*factor) {
 				return "", errors.New("missing or invalid token price")
-			}
-			if j >= 3 && *amount > 0 && protocol != "anthropic" {
-				return "", errors.New("cache write pricing requires the Anthropic usage protocol")
 			}
 			terms = append(terms, variables[j]+" * "+upstreamAmount(multiplyUpstreamAmount(*amount, factor)))
 		}
@@ -410,8 +481,15 @@ func upstreamSalePrice(group model.UpstreamQuoteGroup, quote UpstreamQuote, mult
 		return result, err
 	}
 	factor = multiplyUpstreamAmount(factor, multiplier)
+	needsResponses := group.Protocol == "openai" && quote.Kind == "token" && slices.ContainsFunc(quote.Tiers, func(tier UpstreamTier) bool {
+		return tier.CacheWrite != nil && *tier.CacheWrite > 0 || tier.Cache1h != nil && *tier.Cache1h > 0
+	})
 	var endpoints []string
 	for _, endpoint := range quote.Endpoints {
+		// Separate OpenAI cache write usage is supported on the Responses path.
+		if needsResponses && endpoint == string(constant.EndpointTypeOpenAI) {
+			continue
+		}
 		if (group.Protocol == "openai" && (endpoint == string(constant.EndpointTypeOpenAI) || endpoint == string(constant.EndpointTypeOpenAIResponse))) ||
 			(group.Protocol == "anthropic" && endpoint == string(constant.EndpointTypeAnthropic)) {
 			endpoints = append(endpoints, endpoint)
@@ -420,6 +498,9 @@ func upstreamSalePrice(group model.UpstreamQuoteGroup, quote UpstreamQuote, mult
 		}
 	}
 	if len(endpoints) == 0 {
+		if needsResponses {
+			return result, errors.New("OpenAI cache write pricing requires the Responses endpoint")
+		}
 		return result, errors.New("select a supported API endpoint")
 	}
 	result.Endpoints = strings.Join(endpoints, ",")

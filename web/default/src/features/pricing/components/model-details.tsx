@@ -700,9 +700,12 @@ function GroupPricingSection(props: {
             return (
               <div key={group} className='overflow-hidden rounded-lg border'>
                 <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
-                  <GroupBadge group={group} size='sm' />
+                  <GroupBadge
+                    group={props.model.sale_group_name ?? group}
+                    size='sm'
+                  />
                   <span className='text-muted-foreground font-mono text-xs'>
-                    {ratio}x
+                    {props.model.sale_group_multiplier ?? ratio}x
                   </span>
                 </div>
                 <div className='overflow-x-auto'>
@@ -806,10 +809,13 @@ function GroupPricingSection(props: {
               return (
                 <TableRow key={group}>
                   <TableCell className='py-2.5'>
-                    <GroupBadge group={group} size='sm' />
+                    <GroupBadge
+                      group={props.model.sale_group_name ?? group}
+                      size='sm'
+                    />
                   </TableCell>
                   <TableCell className='text-muted-foreground py-2.5 font-mono text-xs'>
-                    {ratio}x
+                    {props.model.sale_group_multiplier ?? ratio}x
                   </TableCell>
                   {isTokenBased ? (
                     <>

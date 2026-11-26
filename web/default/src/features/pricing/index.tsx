@@ -52,6 +52,27 @@ export function Pricing() {
     usdExchangeRate,
   } = usePricingData()
 
+  const groupNames = useMemo(
+    () =>
+      Object.fromEntries(
+        models.flatMap((model) =>
+          model.sale_group && model.sale_group_name
+            ? [[model.sale_group, model.sale_group_name]]
+            : []
+        )
+      ),
+    [models]
+  )
+  const displayGroupRatios = useMemo(() => {
+    const ratios = { ...groupRatio }
+    for (const model of models) {
+      if (model.sale_group && model.sale_group_multiplier != null) {
+        ratios[model.sale_group] = model.sale_group_multiplier
+      }
+    }
+    return ratios
+  }, [groupRatio, models])
+
   const {
     searchInput,
     sortBy,
@@ -202,13 +223,7 @@ export function Pricing() {
 
           <div className='grid gap-4 xl:grid-cols-[330px_minmax(0,1fr)]'>
             <PricingSidebar
-              groupNames={Object.fromEntries(
-                models.flatMap((model) =>
-                  model.sale_group && model.sale_group_name
-                    ? [[model.sale_group, model.sale_group_name]]
-                    : []
-                )
-              )}
+              groupNames={groupNames}
               quotaTypeFilter={quotaTypeFilter}
               endpointTypeFilter={endpointTypeFilter}
               vendorFilter={vendorFilter}
@@ -221,7 +236,7 @@ export function Pricing() {
               onTagChange={setTagFilter}
               vendors={vendors || []}
               groups={availableGroups}
-              groupRatios={groupRatio}
+              groupRatios={displayGroupRatios}
               tags={availableTags}
               models={models || []}
               hasActiveFilters={hasActiveFilters}
@@ -253,7 +268,8 @@ export function Pricing() {
                 onTagChange={setTagFilter}
                 vendors={vendors || []}
                 groups={availableGroups}
-                groupRatios={groupRatio}
+                groupNames={groupNames}
+                groupRatios={displayGroupRatios}
                 tags={availableTags}
                 models={models || []}
                 hasActiveFilters={hasActiveFilters}

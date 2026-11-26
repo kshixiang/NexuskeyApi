@@ -9,9 +9,13 @@ import (
 )
 
 func GetUserUsableGroups(userGroup string) map[string]string {
+	return GetUserUsableGroupsWithPublished(userGroup, model.PublishedUpstreamGroups())
+}
+
+func GetUserUsableGroupsWithPublished(userGroup string, published map[string]model.PublishedUpstreamGroup) map[string]string {
 	groupsCopy := setting.GetUserUsableGroupsCopy()
-	for key, name := range model.PublishedUpstreamGroups() {
-		groupsCopy[key] = name
+	for key, group := range published {
+		groupsCopy[key] = group.Name
 	}
 	if userGroup != "" {
 		specialSettings, b := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.Get(userGroup)

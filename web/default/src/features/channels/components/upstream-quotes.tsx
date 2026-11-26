@@ -1,4 +1,5 @@
-import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { isAxiosError } from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Download, FileUp, Layers, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -6,16 +7,28 @@ import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 
 const endpoint = '/api/upstream-quotes'
@@ -25,6 +38,11 @@ const dollars = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
   maximumFractionDigits: 10,
+})
+const profitAmounts = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 10,
+  signDisplay: 'exceptZero',
 })
 const selectClass =
   'border-input bg-background h-8 rounded-lg border px-2 text-sm'
@@ -39,6 +57,7 @@ type Group = {
   base_url: string
   protocol: string
   multiplier: number
+  final_multiplier?: number
   credit_cost: number
   revision: number
   active_version: number
@@ -72,6 +91,9 @@ type Quote = {
   local_model?: string
   unit: string
   kind: string
+  confirmed?: boolean
+  usage_verified?: boolean
+  endpoints?: string[] | null
   fixed_price?: number
   tiers?: Tier[]
   media?: { spec: string; meter: string; price?: number | null }[]
@@ -79,14 +101,23 @@ type Quote = {
 }
 type Preview = {
   quote: Quote
+  upstream_multiplier?: number
   quote_version: number
   last_seen_import: number
   sale?: { expression: string; fixed: boolean; fixed_price: number }
   error?: string
 }
 type GroupDetail = Group & {
+  upstream_multiplier?: number
   quotes: Preview[] | null
-  versions: { id: number; created_at: number; multiplier: number }[] | null
+  versions:
+    | {
+        id: number
+        created_at: number
+        multiplier: number
+        final_multiplier?: number
+      }[]
+    | null
 }
 type Change = {
   model: string
@@ -97,6 +128,7 @@ type Change = {
 type ImportGroupPreview = {
   id: string
   name: string
+  upstream_multiplier?: number
   changes: Change[]
 }
 type Comparison = {
@@ -212,7 +244,7 @@ export function UpstreamQuotes() {
                 onImport={() => setImportMode(active)}
               />
               <GroupSettings
-                key={group.data.id + ':' + group.data.revision}
+                key={group.data.id}
                 group={group.data}
                 importedAt={active.imported_at}
               />
@@ -503,6 +535,9 @@ function ImportQuotes({
                   {t('Models')}
                 </th>
                 <th scope='col' className='p-2 text-right'>
+                  {t('Upstream multiplier')}
+                </th>
+                <th scope='col' className='p-2 text-right'>
                   {t('Details')}
                 </th>
               </tr>
@@ -518,6 +553,11 @@ function ImportQuotes({
                   </th>
                   <td className='p-2 text-right tabular-nums'>
                     {group.changes.length}
+                  </td>
+                  <td className='p-2 text-right tabular-nums'>
+                    {group.upstream_multiplier == null
+                      ? '—'
+                      : formatQuoteMultiplier(group.upstream_multiplier)}
                   </td>
                   <td className='p-2 text-right'>
                     <GroupQuotesDialog name={group.name}>
@@ -641,6 +681,35 @@ function ImportQuoteChanges({ changes }: { changes: Change[] }) {
   )
 }
 
+function formatQuoteMultiplier(value: number) {
+  return (
+    new Intl.NumberFormat(undefined, { maximumSignificantDigits: 12 }).format(
+      value
+    ) + '×'
+  )
+}
+
+function groupSaleMultiplier(group: GroupDetail) {
+  return (
+    group.final_multiplier ??
+    Number(
+      (group.multiplier * (group.upstream_multiplier ?? 1)).toPrecision(15)
+    )
+  )
+}
+
+function groupFormValues(group: GroupDetail) {
+  return {
+    name: group.name,
+    sales: group.sales_name,
+    key: '',
+    base: group.base_url,
+    protocol: group.protocol,
+    mark: String(groupSaleMultiplier(group)),
+    revision: group.revision,
+  }
+}
+
 function GroupSettings({
   group,
   importedAt,
@@ -650,23 +719,29 @@ function GroupSettings({
 }) {
   const { t } = useTranslation()
   const client = useQueryClient()
-  const [name, setName] = useState(group.name)
-  const [sales, setSales] = useState(group.sales_name)
-  const [key, setKey] = useState('')
-  const [base, setBase] = useState(group.base_url)
-  const [protocol, setProtocol] = useState(group.protocol)
-  const [mark, setMark] = useState(String(group.multiplier))
-  const [credit, setCredit] = useState(String(group.credit_cost))
+  const [form, setForm] = useState(() => groupFormValues(group))
   const [historic, setHistoric] = useState(0)
+  if (form.revision !== group.revision) {
+    setForm(groupFormValues(group))
+    setHistoric(0)
+  }
+  const { name, sales, key, base, protocol, mark } = form
   const quotes = group.quotes ?? []
+  const finalMode =
+    group.upstream_multiplier != null || group.final_multiplier != null
+  const ratio = Number(mark)
+  const markChanged = ratio !== groupSaleMultiplier(group)
+  const finalMultiplier =
+    finalMode && markChanged ? ratio : group.final_multiplier
   const draft = {
     name,
     sales_name: sales,
     api_key: key || undefined,
     base_url: base,
     protocol,
-    multiplier: Number(mark),
-    credit_cost: Number(credit),
+    multiplier: finalMode ? group.multiplier : ratio,
+    final_multiplier: finalMultiplier,
+    credit_cost: group.credit_cost,
     revision: group.revision,
   }
   const dirty =
@@ -675,8 +750,7 @@ function GroupSettings({
     key !== '' ||
     base !== group.base_url ||
     protocol !== group.protocol ||
-    Number(mark) !== group.multiplier ||
-    Number(credit) !== group.credit_cost
+    markChanged
   async function refresh() {
     await Promise.all([
       client.invalidateQueries({ queryKey: groupKey(group.id) }),
@@ -704,9 +778,39 @@ function GroupSettings({
       if ('response' in error) void refresh()
     },
   })
-  const ratio = Number(mark)
-  const margin = ratio > 0 ? ((1 - 1 / ratio) * 100).toFixed(2) + '%' : '—'
+  const costMultiplier = group.upstream_multiplier
+  const margin =
+    ratio > 0 && (!finalMode || costMultiplier != null)
+      ? ((1 - (costMultiplier ?? 1) / ratio) * 100).toFixed(2) + '%'
+      : '—'
   const busy = save.isPending || listing.isPending
+  const blockedQuote = quotes.find(
+    (item) =>
+      !item.sale &&
+      item.quote.confirmed &&
+      item.quote.usage_verified &&
+      (item.quote.kind === 'token' || item.quote.kind === 'fixed')
+  )
+  const quoteError = blockedQuote?.error
+  let publishBlocker: string | undefined
+  if (dirty) {
+    publishBlocker = t('Save group settings before publishing')
+  } else if (!group.key_hint || !group.base_url) {
+    publishBlocker = t(
+      'Configure the upstream API key and base URL before publishing'
+    )
+  } else if (!historic) {
+    if (blockedQuote && quoteError) {
+      publishBlocker = `${blockedQuote.quote.model_id} · ${t(quoteError, { defaultValue: quoteError })}`
+    } else if (blockedQuote || !quotes.some((item) => item.sale)) {
+      publishBlocker = t(
+        'No publishable models. Check the group quote details.'
+      )
+    }
+  }
+  const listingError = isAxiosError<Envelope<unknown>>(listing.error)
+    ? listing.error.response?.data?.message || listing.error.message
+    : listing.error?.message
   const state =
     group.active_version > 0
       ? 'Published'
@@ -739,21 +843,21 @@ function GroupSettings({
           label={t('Channel group name')}
           id='quote-group-name'
           value={name}
-          onChange={setName}
+          onChange={(name) => setForm({ ...form, name })}
           required
         />
         <QuoteField
           label={t('Sales group name')}
           id='quote-sales-name'
           value={sales}
-          onChange={setSales}
+          onChange={(sales) => setForm({ ...form, sales })}
           required
         />
         <QuoteField
           label={t('Upstream API Key')}
           id='quote-key'
           value={key}
-          onChange={setKey}
+          onChange={(key) => setForm({ ...form, key })}
           type='password'
           placeholder={group.key_hint || undefined}
         />
@@ -761,7 +865,7 @@ function GroupSettings({
           label={t('Upstream API base URL')}
           id='quote-base'
           value={base}
-          onChange={setBase}
+          onChange={(base) => setForm({ ...form, base })}
           type='url'
         />
         <div className='space-y-1'>
@@ -770,29 +874,45 @@ function GroupSettings({
             id='quote-protocol'
             className={selectClass + ' w-full'}
             value={protocol}
-            onChange={(event) => setProtocol(event.target.value)}
+            onChange={(event) =>
+              setForm({ ...form, protocol: event.target.value })
+            }
           >
             <option value='openai'>OpenAI</option>
             <option value='anthropic'>Anthropic</option>
           </select>
         </div>
+        <div className='space-y-1'>
+          <span className='text-sm font-medium'>
+            {t('Upstream multiplier')}
+          </span>
+          <p className='flex h-8 items-center font-mono tabular-nums'>
+            {costMultiplier == null
+              ? '—'
+              : formatQuoteMultiplier(costMultiplier)}
+          </p>
+        </div>
         <QuoteField
-          label={t('Sales multiplier')}
+          label={
+            finalMode ? t('Final sales multiplier') : t('Sales multiplier')
+          }
           id='quote-markup'
           value={mark}
-          onChange={setMark}
+          onChange={(mark) => setForm({ ...form, mark })}
           type='number'
           min='0.000000001'
           required
         />
-        <QuoteField
-          label={t('USD cost per credit')}
-          id='quote-credit'
-          value={credit}
-          onChange={setCredit}
-          type='number'
-          min='0'
-        />
+        {costMultiplier != null && (
+          <div className='space-y-1'>
+            <span className='text-sm font-medium'>
+              {t('Multiplier spread')}
+            </span>
+            <p className='font-mono tabular-nums'>
+              {ratio > 0 ? formatQuoteMultiplier(ratio - costMultiplier) : '—'}
+            </p>
+          </div>
+        )}
         <div className='space-y-1'>
           <span className='text-muted-foreground text-xs'>
             {t('Estimated gross margin')}
@@ -813,8 +933,9 @@ function GroupSettings({
           <SavedGroupQuotes
             group={group}
             quotes={quotes}
-            ratio={ratio}
-            credit={Number(credit)}
+            ratio={finalMode ? group.multiplier : ratio}
+            finalMultiplier={finalMultiplier}
+            credit={group.credit_cost}
             importedAt={importedAt}
             onSaved={refresh}
           />
@@ -833,18 +954,17 @@ function GroupSettings({
               <option key={version.id} value={version.id}>
                 #{version.id} ·{' '}
                 {new Date(version.created_at * 1000).toLocaleString()} ·{' '}
-                {version.multiplier}×
+                {formatQuoteMultiplier(
+                  version.final_multiplier ?? version.multiplier
+                )}
               </option>
             ))}
           </select>
         )}
         <Button
-          disabled={
-            busy ||
-            dirty ||
-            !group.key_hint ||
-            !group.base_url ||
-            (!historic && !quotes.some((item) => item.sale))
+          disabled={busy || Boolean(publishBlocker)}
+          aria-describedby={
+            publishBlocker ? 'upstream-publish-blocker' : undefined
           }
           onClick={() => listing.mutate(true)}
         >
@@ -864,6 +984,20 @@ function GroupSettings({
           </Button>
         )}
       </div>
+      {publishBlocker && (
+        <p
+          className='text-warning text-sm'
+          id='upstream-publish-blocker'
+          role='status'
+        >
+          {publishBlocker}
+        </p>
+      )}
+      {listingError && (
+        <p className='text-destructive text-sm' role='alert'>
+          {t(listingError, { defaultValue: listingError })}
+        </p>
+      )}
     </div>
   )
 }
@@ -872,12 +1006,12 @@ function SavedGroupQuotes(props: {
   group: GroupDetail
   quotes: Preview[]
   ratio: number
+  finalMultiplier?: number
   credit: number
   importedAt: number
   onSaved: () => Promise<void>
 }) {
   const { t } = useTranslation()
-  const [editingQuote, setEditingQuote] = useState<Quote>()
   return (
     <table className='w-full min-w-150 text-left text-sm'>
       <thead className='bg-muted sticky top-0'>
@@ -897,9 +1031,17 @@ function SavedGroupQuotes(props: {
         </tr>
       </thead>
       <tbody>
-        {props.quotes.map((item) => (
-          <Fragment key={item.quote.model_id}>
-            <tr className='border-t align-top'>
+        {props.quotes.map((item) => {
+          const sourceMultiplier = item.upstream_multiplier
+          const adjustment =
+            props.finalMultiplier == null
+              ? props.ratio
+              : sourceMultiplier != null && sourceMultiplier > 0
+                ? props.finalMultiplier / sourceMultiplier
+                : 0
+          const currencyFactor = item.quote.unit === 'credit' ? props.credit : 1
+          return (
+            <tr key={item.quote.model_id} className='border-t align-top'>
               <th
                 scope='row'
                 className='max-w-48 p-2 text-left text-xs font-medium [overflow-wrap:anywhere]'
@@ -915,27 +1057,50 @@ function SavedGroupQuotes(props: {
                 <QuoteRates quote={item.quote} factor={1} />
               </td>
               <td className='p-2'>
-                {item.sale && (
-                  <QuoteRates
-                    quote={item.quote}
-                    factor={
-                      props.ratio *
-                      (item.quote.unit === 'credit' ? props.credit : 1)
-                    }
-                    usd
-                  />
-                )}
+                {adjustment > 0 &&
+                  Number.isFinite(adjustment) &&
+                  currencyFactor > 0 && (
+                    <QuoteRates
+                      quote={item.quote}
+                      factor={adjustment * currencyFactor}
+                      costFactor={currencyFactor}
+                      usd
+                    />
+                  )}
               </td>
-              <td className='p-2 text-xs'>
-                {item.sale ? t('Eligible for listing') : item.error}
-                <Button
-                  type='button'
-                  size='xs'
-                  variant='ghost'
-                  onClick={() => setEditingQuote(item.quote)}
-                >
-                  {t('Edit quote')}
-                </Button>
+              <td className='space-y-1.5 p-2 text-xs'>
+                <div className='flex flex-wrap gap-1'>
+                  <Badge
+                    variant={item.quote.confirmed ? 'secondary' : 'outline'}
+                  >
+                    {item.quote.confirmed
+                      ? t('Upstream cost confirmed')
+                      : t('Upstream cost pending confirmation')}
+                  </Badge>
+                  <Badge
+                    variant={
+                      item.quote.usage_verified ? 'secondary' : 'outline'
+                    }
+                  >
+                    {item.quote.usage_verified
+                      ? t('API usage verified')
+                      : t('API usage pending verification')}
+                  </Badge>
+                </div>
+                {item.sale ? (
+                  <Badge variant='outline'>{t('Eligible for listing')}</Badge>
+                ) : (
+                  item.error && (
+                    <p className='text-muted-foreground'>
+                      {t(item.error, { defaultValue: item.error })}
+                    </p>
+                  )
+                )}
+                <QuoteEditorDialog
+                  group={props.group}
+                  quote={item.quote}
+                  onSaved={props.onSaved}
+                />
                 {item.last_seen_import < props.importedAt && (
                   <p className='text-muted-foreground mt-1'>
                     {t('Missing from this import')}
@@ -951,20 +1116,8 @@ function SavedGroupQuotes(props: {
                 )}
               </td>
             </tr>
-            {editingQuote?.model_id === item.quote.model_id && (
-              <tr className='border-t'>
-                <td colSpan={4} className='p-2'>
-                  <QuoteEditor
-                    group={props.group}
-                    quote={editingQuote}
-                    onClose={() => setEditingQuote(undefined)}
-                    onSaved={props.onSaved}
-                  />
-                </td>
-              </tr>
-            )}
-          </Fragment>
-        ))}
+          )
+        })}
         {!props.quotes.length && (
           <tr>
             <td colSpan={4} className='text-muted-foreground p-4'>
@@ -977,73 +1130,375 @@ function SavedGroupQuotes(props: {
   )
 }
 
-function QuoteEditor({
+const quotePriceColumns = [
+  ['input', 'Input'],
+  ['output', 'Output'],
+  ['cache_read', 'Cache Read'],
+  ['cache_write', 'Cache Write'],
+  ['cache_write_1h', 'One-hour cache write'],
+] as const
+
+const quoteEndpointPaths = new Map([
+  ['openai', '/v1/chat/completions'],
+  ['openai-response', '/v1/responses'],
+  ['anthropic', '/v1/messages'],
+])
+
+function readQuoteForm(form: HTMLFormElement, quote: Quote): Quote {
+  const data = new FormData(form)
+  const price = (name: string) => {
+    const value = data.get(name)
+    return typeof value === 'string' && value !== '' ? Number(value) : undefined
+  }
+  const updated = {
+    ...quote,
+    local_model: String(data.get('local_model') ?? '').trim() || undefined,
+    unit: String(data.get('unit')),
+    confirmed: data.has('confirmed'),
+    usage_verified: data.has('usage_verified'),
+    endpoints: data.getAll('endpoints').map(String),
+    reference: undefined,
+  }
+  if (quote.kind === 'token') {
+    updated.tiers = quote.tiers?.map((tier, index) => ({
+      ...tier,
+      ...Object.fromEntries(
+        quotePriceColumns.map(([field]) => [field, price(field + '-' + index)])
+      ),
+    }))
+  } else if (quote.kind === 'fixed') {
+    updated.fixed_price = price('fixed_price')
+  } else {
+    updated.media = quote.media?.map((rate, index) => ({
+      ...rate,
+      price: price('media-' + index),
+    }))
+  }
+  return updated
+}
+
+function QuoteEditorDialog({
   group,
   quote,
-  onClose,
   onSaved,
 }: {
-  group: GroupDetail
+  group: Group
   quote: Quote
-  onClose: () => void
   onSaved: () => Promise<void>
 }) {
   const { t } = useTranslation()
-  const [raw, setRaw] = useState(() =>
-    JSON.stringify({ ...quote, reference: undefined }, null, 2)
-  )
-  const [error, setError] = useState('')
+  const [editing, setEditing] = useState<{ quote: Quote; revision: number }>()
+  const [json, setJson] = useState<string>()
   const save = useMutation({
-    mutationFn: async () =>
+    mutationFn: (draft: Quote | string) =>
       request('put', '/groups/' + group.id + '/quote', {
-        revision: group.revision,
-        quote: { ...JSON.parse(raw), model_id: quote.model_id },
+        revision: editing?.revision,
+        quote: {
+          ...(typeof draft === 'string' ? JSON.parse(draft) : draft),
+          model_id: quote.model_id,
+        },
       }),
     onSuccess: async () => {
       await onSaved()
-      onClose()
+      setEditing(undefined)
     },
-    onError: (cause) => setError(cause.message),
   })
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editing || save.isPending) return
+    if (json !== undefined) {
+      save.mutate(json)
+    } else {
+      save.mutate(readQuoteForm(event.currentTarget, editing.quote))
+    }
+  }
+
+  const draft = editing?.quote
   return (
-    <div className='space-y-2 rounded-lg border p-3'>
-      <Label htmlFor='upstream-quote-editor'>
-        {t('Edit quote')} · {quote.model_id}
-      </Label>
-      <p className='text-muted-foreground text-sm'>
-        {t(
-          'Set confirmed and usage_verified after checking the cost and API usage.'
+    <Dialog
+      open={!!editing}
+      onOpenChange={(open) => {
+        if (save.isPending) return
+        if (open) {
+          save.reset()
+          setJson(undefined)
+          setEditing({ quote, revision: group.revision })
+        } else {
+          setEditing(undefined)
+        }
+      }}
+    >
+      <DialogTrigger
+        aria-label={t('Edit quote') + ' · ' + quote.model_id}
+        render={<Button type='button' size='xs' variant='ghost' />}
+      >
+        {t('Edit quote')}
+      </DialogTrigger>
+      <DialogContent className='flex max-h-[85dvh] min-h-0 flex-col overflow-hidden sm:max-w-5xl'>
+        <DialogHeader className='shrink-0 pr-8'>
+          <DialogTitle>{t('Edit quote')}</DialogTitle>
+          <DialogDescription className='font-mono [overflow-wrap:anywhere]'>
+            {quote.model_id}
+          </DialogDescription>
+        </DialogHeader>
+        {draft && (
+          <form className='flex min-h-0 flex-col gap-4' onSubmit={submit}>
+            <div className='min-h-0 space-y-4 overflow-y-auto overscroll-contain p-1'>
+              {json === undefined ? (
+                <QuoteEditorFields quote={draft} />
+              ) : (
+                <Field>
+                  <FieldLabel htmlFor='upstream-quote-editor'>
+                    {t('Edit quote JSON')}
+                  </FieldLabel>
+                  <Textarea
+                    id='upstream-quote-editor'
+                    className='min-h-64 font-mono text-xs'
+                    value={json}
+                    onChange={(event) => setJson(event.target.value)}
+                  />
+                </Field>
+              )}
+              {save.error && (
+                <p role='alert' className='text-destructive text-sm'>
+                  {save.error.message}
+                </p>
+              )}
+            </div>
+            <DialogFooter className='shrink-0'>
+              {json === undefined && (
+                <Button
+                  type='button'
+                  variant='ghost'
+                  className='sm:mr-auto'
+                  disabled={save.isPending}
+                  onClick={(event) => {
+                    const form = event.currentTarget.form
+                    if (form?.reportValidity()) {
+                      save.reset()
+                      setJson(
+                        JSON.stringify(readQuoteForm(form, draft), null, 2)
+                      )
+                    }
+                  }}
+                >
+                  {t('Edit quote JSON')}
+                </Button>
+              )}
+              <DialogClose
+                render={
+                  <Button
+                    type='button'
+                    variant='outline'
+                    disabled={save.isPending}
+                  />
+                }
+              >
+                {t('Cancel')}
+              </DialogClose>
+              <Button type='submit' disabled={save.isPending}>
+                {t('Save quote')}
+              </Button>
+            </DialogFooter>
+          </form>
         )}
-      </p>
-      <Textarea
-        id='upstream-quote-editor'
-        className='min-h-40 font-mono text-xs'
-        value={raw}
-        onChange={(event) => setRaw(event.target.value)}
-      />
-      {error && (
-        <p role='alert' className='text-destructive text-sm'>
-          {error}
-        </p>
-      )}
-      <div className='flex gap-2'>
-        <Button
-          size='sm'
-          disabled={save.isPending}
-          onClick={() => save.mutate()}
-        >
-          {t('Save quote')}
-        </Button>
-        <Button
-          size='sm'
-          variant='outline'
-          disabled={save.isPending}
-          onClick={onClose}
-        >
-          {t('Cancel')}
-        </Button>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function QuoteEditorFields({ quote }: { quote: Quote }) {
+  const { t } = useTranslation()
+  const endpoints = new Set([
+    ...quoteEndpointPaths.keys(),
+    ...(quote.endpoints ?? []),
+  ])
+  return (
+    <FieldGroup className='gap-4'>
+      <div className='grid gap-3 sm:grid-cols-[1fr_12rem]'>
+        <Field className='gap-1.5'>
+          <FieldLabel htmlFor='quote-local-model'>
+            {t('Local model name')}
+          </FieldLabel>
+          <Input
+            id='quote-local-model'
+            name='local_model'
+            defaultValue={quote.local_model}
+            placeholder={quote.model_id}
+          />
+        </Field>
+        <Field className='gap-1.5'>
+          <FieldLabel htmlFor='quote-unit'>{t('Currency')}</FieldLabel>
+          <select
+            className={selectClass}
+            id='quote-unit'
+            name='unit'
+            defaultValue={quote.unit}
+          >
+            <option value='usd'>{t('USD')}</option>
+            <option value='credit'>{t('Credits')}</option>
+            {quote.unit !== 'usd' && quote.unit !== 'credit' && (
+              <option value={quote.unit}>{quote.unit || '—'}</option>
+            )}
+          </select>
+        </Field>
       </div>
+      <QuotePriceTable quote={quote} />
+      <fieldset className='flex flex-wrap gap-x-6 gap-y-3'>
+        <legend className='mb-2 font-medium'>{t('API Endpoints')}</legend>
+        {Array.from(endpoints, (endpoint, index) => (
+          <Field orientation='horizontal' className='w-auto' key={endpoint}>
+            <Checkbox
+              id={'quote-endpoint-' + index}
+              name='endpoints'
+              value={endpoint}
+              defaultChecked={quote.endpoints?.includes(endpoint)}
+            />
+            <FieldLabel
+              htmlFor={'quote-endpoint-' + index}
+              className='font-mono text-xs'
+            >
+              {quoteEndpointPaths.get(endpoint) ?? endpoint}
+            </FieldLabel>
+          </Field>
+        ))}
+      </fieldset>
+      <div className='flex flex-wrap gap-x-6 gap-y-3 border-t pt-4'>
+        <Field orientation='horizontal' className='w-auto'>
+          <Checkbox
+            id='quote-confirmed'
+            name='confirmed'
+            defaultChecked={quote.confirmed}
+          />
+          <FieldLabel htmlFor='quote-confirmed'>
+            {t('Upstream cost confirmed')}
+          </FieldLabel>
+        </Field>
+        <Field orientation='horizontal' className='w-auto'>
+          <Checkbox
+            id='quote-usage-verified'
+            name='usage_verified'
+            defaultChecked={quote.usage_verified}
+          />
+          <FieldLabel htmlFor='quote-usage-verified'>
+            {t('API usage verified')}
+          </FieldLabel>
+        </Field>
+      </div>
+    </FieldGroup>
+  )
+}
+
+function QuotePriceTable({ quote }: { quote: Quote }) {
+  const { t } = useTranslation()
+  return (
+    <div className='rounded-lg border'>
+      {quote.kind === 'token' ? (
+        <Table className='min-w-180' aria-label={t('Price per million tokens')}>
+          <TableHeader className='bg-muted/50'>
+            <TableRow>
+              <TableHead scope='col'>
+                {t('Tier')} · {t('Price per million tokens')}
+              </TableHead>
+              {quotePriceColumns.map(([field, label]) => (
+                <TableHead key={field} scope='col'>
+                  {t(label)}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {quote.tiers?.map((tier, index) => {
+              const name = tier.name || t('Tier') + ' ' + (index + 1)
+              return (
+                <TableRow key={index}>
+                  <TableCell>
+                    <div className='font-medium'>{name}</div>
+                    {tier.limit != null && (
+                      <div className='text-muted-foreground text-xs'>
+                        {tier.operator} {tier.limit}
+                      </div>
+                    )}
+                    {tier.window && <QuoteTimeWindow window={tier.window} />}
+                  </TableCell>
+                  {quotePriceColumns.map(([field, label]) => (
+                    <TableCell key={field}>
+                      <QuotePriceInput
+                        name={field + '-' + index}
+                        label={name + ' · ' + t(label)}
+                        value={tier[field]}
+                      />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      ) : (
+        <Table aria-label={t('Upstream cost')}>
+          <TableHeader className='bg-muted/50'>
+            <TableRow>
+              <TableHead scope='col'>{t('Specification')}</TableHead>
+              <TableHead scope='col'>{t('Price')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {quote.kind === 'fixed' ? (
+              <TableRow>
+                <TableCell>{t('Per Request')}</TableCell>
+                <TableCell>
+                  <QuotePriceInput
+                    name='fixed_price'
+                    label={t('Per Request')}
+                    value={quote.fixed_price}
+                  />
+                </TableCell>
+              </TableRow>
+            ) : (
+              quote.media?.map((rate, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    {rate.spec} · {rate.meter}
+                  </TableCell>
+                  <TableCell>
+                    <QuotePriceInput
+                      name={'media-' + index}
+                      label={rate.spec + ' · ' + rate.meter}
+                      value={rate.price}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
     </div>
+  )
+}
+
+function QuotePriceInput({
+  name,
+  label,
+  value,
+}: {
+  name: string
+  label: string
+  value?: number | null
+}) {
+  return (
+    <Input
+      aria-label={label}
+      className='h-8 min-w-24 font-mono tabular-nums'
+      name={name}
+      type='number'
+      min='0'
+      step='any'
+      defaultValue={value ?? ''}
+      placeholder='—'
+    />
   )
 }
 
@@ -1077,21 +1532,33 @@ function QuoteField({
 function QuoteRates({
   quote,
   factor,
+  costFactor,
   usd,
 }: {
   quote?: Quote
   factor: number
+  costFactor?: number
   usd?: boolean
 }) {
   const { t } = useTranslation()
   if (!quote) return '—'
   const currency = usd || quote.unit === 'usd'
-  const amount = (value?: number | null) =>
-    value == null
-      ? '—'
-      : currency
-        ? dollars.format(value * factor)
-        : (value * factor).toLocaleString()
+  const amount = (value?: number | null) => {
+    if (value == null) return '—'
+    const price = currency
+      ? dollars.format(value * factor)
+      : (value * factor).toLocaleString()
+    if (costFactor == null) return price
+    const profit = Number((value * (factor - costFactor)).toFixed(10))
+    return (
+      <span className='whitespace-nowrap'>
+        {price}{' '}
+        <span className='text-yellow-500'>
+          （{profit === 0 ? '0' : profitAmounts.format(profit)}）
+        </span>
+      </span>
+    )
+  }
   if (quote.kind === 'fixed')
     return (
       <span className='font-mono'>

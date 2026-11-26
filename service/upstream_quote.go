@@ -40,20 +40,22 @@ type UpstreamImportChange struct {
 }
 
 type UpstreamImportGroupPreview struct {
-	ID      string                 `json:"id"`
-	Name    string                 `json:"name"`
-	Changes []UpstreamImportChange `json:"changes"`
+	ID                 string                 `json:"id"`
+	Name               string                 `json:"name"`
+	UpstreamMultiplier *float64               `json:"upstream_multiplier,omitempty"`
+	Changes            []UpstreamImportChange `json:"changes"`
 }
 
 type UpstreamGroupConfig struct {
-	Name       string  `json:"name"`
-	SalesName  string  `json:"sales_name"`
-	APIKey     *string `json:"api_key"`
-	BaseURL    string  `json:"base_url"`
-	Protocol   string  `json:"protocol"`
-	Multiplier float64 `json:"multiplier"`
-	CreditCost float64 `json:"credit_cost"`
-	Revision   int     `json:"revision"`
+	Name            string   `json:"name"`
+	SalesName       string   `json:"sales_name"`
+	APIKey          *string  `json:"api_key"`
+	BaseURL         string   `json:"base_url"`
+	Protocol        string   `json:"protocol"`
+	Multiplier      float64  `json:"multiplier"`
+	FinalMultiplier *float64 `json:"final_multiplier"`
+	CreditCost      float64  `json:"credit_cost"`
+	Revision        int      `json:"revision"`
 }
 
 type UpstreamChannelView struct {
@@ -62,17 +64,19 @@ type UpstreamChannelView struct {
 }
 
 type UpstreamQuotePreview struct {
-	Quote        UpstreamQuote            `json:"quote"`
-	QuoteVersion int                      `json:"quote_version"`
-	LastSeen     int64                    `json:"last_seen_import"`
-	Sale         *model.UpstreamSaleModel `json:"sale,omitempty"`
-	Error        string                   `json:"error,omitempty"`
+	Quote              UpstreamQuote            `json:"quote"`
+	UpstreamMultiplier *float64                 `json:"upstream_multiplier,omitempty"`
+	QuoteVersion       int                      `json:"quote_version"`
+	LastSeen           int64                    `json:"last_seen_import"`
+	Sale               *model.UpstreamSaleModel `json:"sale,omitempty"`
+	Error              string                   `json:"error,omitempty"`
 }
 
 type UpstreamGroupPreview struct {
 	model.UpstreamQuoteGroup
-	Quotes   []UpstreamQuotePreview      `json:"quotes"`
-	Versions []model.UpstreamSaleVersion `json:"versions"`
+	UpstreamMultiplier *float64                    `json:"upstream_multiplier,omitempty"`
+	Quotes             []UpstreamQuotePreview      `json:"quotes"`
+	Versions           []model.UpstreamSaleVersion `json:"versions"`
 }
 
 var ErrUpstreamDraftChanged = errors.New("the draft changed; refresh and preview it again")
@@ -166,6 +170,12 @@ func PreviewUpstreamImportGroups(input UpstreamImport) ([]UpstreamImportGroupPre
 			Name:    item.Name,
 			Changes: make([]UpstreamImportChange, 0, len(item.Quotes)),
 		}
+		multipliers := upstreamGroupMultipliers{}
+		for _, quote := range item.Quotes {
+			group, _ := upstreamQuoteMultipliers(quote)
+			multipliers.add(group, 0)
+		}
+		preview.UpstreamMultiplier = multipliers.common()
 		var group model.UpstreamQuoteGroup
 		if channel.ID > 0 {
 			err := findUpstreamImportGroup(model.DB, channel.ID, item, &group)
@@ -385,7 +395,8 @@ func SaveUpstreamGroupConfig(id int, input UpstreamGroupConfig) error {
 	input.Name, input.SalesName = strings.TrimSpace(input.Name), strings.TrimSpace(input.SalesName)
 	if !validUpstreamName(input.Name) || input.SalesName == "" || utf8.RuneCountInString(input.SalesName) > 272 ||
 		strings.IndexFunc(input.SalesName, unicode.IsControl) != -1 || input.Multiplier <= 0 ||
-		!validUpstreamAmount(input.Multiplier) || !validUpstreamAmount(input.CreditCost) {
+		!validUpstreamAmount(input.Multiplier) || !validUpstreamAmount(input.CreditCost) ||
+		(input.FinalMultiplier != nil && (*input.FinalMultiplier <= 0 || !validUpstreamAmount(*input.FinalMultiplier))) {
 		return errors.New("check the group names, multiplier and credit cost")
 	}
 	if input.Protocol != "openai" && input.Protocol != "anthropic" {
@@ -410,6 +421,9 @@ func SaveUpstreamGroupConfig(id int, input UpstreamGroupConfig) error {
 	}
 	values := map[string]any{"name": input.Name, "sales_name": input.SalesName, "base_url": base,
 		"protocol": input.Protocol, "multiplier": input.Multiplier, "credit_cost": input.CreditCost}
+	if input.FinalMultiplier != nil {
+		values["final_multiplier"] = *input.FinalMultiplier
+	}
 	if input.APIKey != nil {
 		key := strings.TrimSpace(*input.APIKey)
 		if len(key) > 4096 || strings.IndexFunc(key, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }) != -1 {
@@ -465,9 +479,22 @@ func previewUpstreamGroup(tx *gorm.DB, id int, multiplier *float64) (UpstreamGro
 	if err != nil {
 		return preview, err
 	}
+	multipliers := upstreamGroupMultipliers{}
 	for index := range quotes {
 		item := &quotes[index]
-		price, err := upstreamSalePrice(preview.UpstreamQuoteGroup, item.Quote, ratio)
+		group, applied := upstreamQuoteMultipliers(item.Quote)
+		item.UpstreamMultiplier = applied
+		multipliers.add(group, item.LastSeen)
+	}
+	preview.UpstreamMultiplier = multipliers.common()
+	for index := range quotes {
+		item := &quotes[index]
+		adjustment, err := upstreamSalesAdjustment(preview.UpstreamQuoteGroup, ratio, item.UpstreamMultiplier)
+		if err != nil {
+			item.Error = err.Error()
+			continue
+		}
+		price, err := upstreamSalePrice(preview.UpstreamQuoteGroup, item.Quote, adjustment)
 		if err != nil {
 			item.Error = err.Error()
 			continue
@@ -495,7 +522,8 @@ func SetUpstreamGroupListing(id, revision, restoreVersion int, publish bool) err
 		}
 		version := model.UpstreamSaleVersion{
 			GroupID: id, Markup: preview.Multiplier, CreditCost: preview.CreditCost,
-			Protocol: preview.Protocol, CreatedAt: time.Now().Unix(),
+			FinalMultiplier: preview.FinalMultiplier,
+			Protocol:        preview.Protocol, CreatedAt: time.Now().Unix(),
 		}
 		if publish {
 			if err := publishUpstreamGroup(tx, preview, &version, restoreVersion); err != nil {
@@ -524,6 +552,7 @@ func publishUpstreamGroup(tx *gorm.DB, preview UpstreamGroupPreview, version *mo
 			return err
 		}
 		version.Markup = previous.Markup
+		version.FinalMultiplier = previous.FinalMultiplier
 		version.CreditCost = previous.CreditCost
 		if err := tx.Where("version_id = ?", previous.ID).Find(&prices).Error; err != nil {
 			return err

@@ -442,7 +442,16 @@ export function usePricingColumns(
       header: t('Groups'),
       cell: ({ row }) => {
         if (row.original.sale_group_name) {
-          return <GroupBadge group={row.original.sale_group_name} size='sm' />
+          return (
+            <div className='flex items-center gap-2'>
+              <GroupBadge group={row.original.sale_group_name} size='sm' />
+              {row.original.sale_group_multiplier != null && (
+                <span className='text-muted-foreground font-mono text-xs'>
+                  {row.original.sale_group_multiplier}x
+                </span>
+              )}
+            </div>
+          )
         }
         const groups = row.original.enable_groups || []
         if (groups.length === 0) {

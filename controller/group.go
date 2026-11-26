@@ -28,12 +28,8 @@ func GetUserGroups(c *gin.Context) {
 	userGroup := ""
 	userId := c.GetInt("id")
 	userGroup, _ = model.GetUserGroup(userId, false)
-	userUsableGroups := service.GetUserUsableGroups(userGroup)
-	for key, name := range userUsableGroups {
-		if model.IsUpstreamSaleGroup(key) {
-			usableGroups[key] = map[string]interface{}{"ratio": 1, "desc": name}
-		}
-	}
+	published := model.PublishedUpstreamGroups()
+	userUsableGroups := service.GetUserUsableGroupsWithPublished(userGroup, published)
 	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
 		// UserUsableGroups contains the groups that the user can use
 		if desc, ok := userUsableGroups[groupName]; ok {
@@ -41,6 +37,15 @@ func GetUserGroups(c *gin.Context) {
 				"ratio": service.GetUserGroupRatio(userGroup, groupName),
 				"desc":  desc,
 			}
+		}
+	}
+	for key, name := range userUsableGroups {
+		if model.IsUpstreamSaleGroup(key) {
+			ratio := 1.0
+			if final := published[key].FinalMultiplier; final != nil {
+				ratio = *final
+			}
+			usableGroups[key] = map[string]interface{}{"ratio": ratio, "desc": name}
 		}
 	}
 	if _, ok := userUsableGroups["auto"]; ok {

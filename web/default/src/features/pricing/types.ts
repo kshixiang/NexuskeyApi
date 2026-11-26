@@ -32,6 +32,7 @@ export type PricingModel = {
   model_name: string
   sale_group?: string
   sale_group_name?: string
+  sale_group_multiplier?: number
   description?: string
   vendor_id?: number
   vendor_name?: string

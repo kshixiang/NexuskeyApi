@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { type ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
@@ -50,7 +49,7 @@ function getQuotaProgressColor(percentage: number): string {
   return '[&_[data-slot=progress-indicator]]:bg-emerald-500'
 }
 
-function useGroupRatios(): Record<string, number> {
+function useGroupDisplay() {
   const isAdmin = useAuthStore((s) =>
     Boolean(s.auth.user?.role && s.auth.user.role >= 10)
   )
@@ -73,31 +72,18 @@ function useGroupRatios(): Record<string, number> {
   })
 
   const { data: userGroupsData } = useQuery({
-    queryKey: ['user-self-groups'],
+    queryKey: ['user-groups'],
     queryFn: getUserGroups,
-    enabled: !isAdmin,
     staleTime: 5 * 60 * 1000,
-    select: (res) => {
-      if (!res.success || !res.data) return {}
-      const ratios: Record<string, number> = {}
-      for (const [group, info] of Object.entries(res.data)) {
-        if (typeof info.ratio === 'number') {
-          ratios[group] = info.ratio
-        }
-      }
-      return ratios
-    },
+    select: (res) => (res.success ? res.data : undefined),
   })
 
-  return useMemo(
-    () => (isAdmin ? adminData : userGroupsData) ?? {},
-    [isAdmin, adminData, userGroupsData]
-  )
+  return { isAdmin, adminRatios: adminData, userGroups: userGroupsData }
 }
 
 export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
   const { t } = useTranslation()
-  const groupRatios = useGroupRatios()
+  const { isAdmin, adminRatios, userGroups } = useGroupDisplay()
   return [
     {
       id: 'select',
@@ -228,7 +214,11 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
       cell: ({ row }) => {
         const apiKey = row.original
         const group = row.getValue('group') as string
-        const ratio = group && group !== 'auto' ? groupRatios[group] : undefined
+        const info = userGroups?.[group]
+        const isSaleGroup = group?.startsWith('upstream-sale-')
+        const userRatio =
+          typeof info?.ratio === 'number' ? info.ratio : undefined
+        const ratio = isAdmin && !isSaleGroup ? adminRatios?.[group] : userRatio
 
         if (group === 'auto') {
           return (
@@ -258,7 +248,13 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
             </Tooltip>
           )
         }
-        return <GroupBadge group={group} ratio={ratio} />
+        return (
+          <GroupBadge
+            group={group}
+            label={isSaleGroup ? info?.desc : undefined}
+            ratio={ratio}
+          />
+        )
       },
       meta: { label: t('Group'), mobileHidden: true },
     },

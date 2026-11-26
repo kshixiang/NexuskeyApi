@@ -69,9 +69,9 @@ export async function getUserGroups(): Promise<GroupOption[]> {
 
   // label is for button display (name only); desc is for dropdown content
   return Object.entries(groupData).map(([group, info]) => ({
-    label: group,
+    label: group.startsWith('upstream-sale-') ? info.desc || group : group,
     value: group,
     ratio: info.ratio,
-    desc: info.desc,
+    desc: group.startsWith('upstream-sale-') ? undefined : info.desc,
   }))
 }
