@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { Fragment, useState, type FormEvent, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Download, FileUp, Layers, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -6,6 +6,14 @@ import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -47,7 +55,12 @@ type Tier = {
   name?: string
   limit?: number
   operator?: string
-  window?: unknown
+  window?: {
+    timezone: string
+    start_minute: number
+    end_minute: number
+    weekdays?: number[]
+  }
   input?: number | null
   output?: number | null
   cache_read?: number
@@ -72,15 +85,19 @@ type Preview = {
   error?: string
 }
 type GroupDetail = Group & {
-  quotes: Preview[]
+  quotes: Preview[] | null
   versions: { id: number; created_at: number; multiplier: number }[] | null
 }
 type Change = {
-  group: string
   model: string
   status: string
   previous?: Quote
   incoming?: Quote
+}
+type ImportGroupPreview = {
+  id: string
+  name: string
+  changes: Change[]
 }
 type Comparison = {
   channel: string
@@ -311,18 +328,24 @@ function ImportQuotes({
   const { t } = useTranslation()
   const client = useQueryClient()
   const [source, setSource] = useState(channel?.source ?? 'kedaya')
-  const [raw, setRaw] = useState('')
+  const [snapshot, setSnapshot] = useState<{ raw: string; manual: boolean }>()
   const [prepared, setPrepared] = useState<{
     input: unknown
-    changes: Change[]
+    groups: ImportGroupPreview[]
   }>()
   const [error, setError] = useState('')
   const load = useMutation({
-    mutationFn: () => request<{ groups: unknown }>('get', '/source/' + source),
-    onSuccess: (snapshot) => setSnapshot(JSON.stringify(snapshot, null, 2)),
+    mutationFn: async (file: File | undefined) => {
+      if (file) return file.text()
+      const catalog = await request<unknown>('get', '/source/' + source)
+      return JSON.stringify(catalog)
+    },
+    onMutate: () => setError(''),
+    onSuccess: (raw) => updateSnapshot({ raw, manual: false }),
+    onError: (cause) => setError(cause.message),
   })
   const preview = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (raw: string) => {
       const snapshot = JSON.parse(raw)
       if (snapshot.source && snapshot.source !== source)
         throw new Error(t('Snapshot source does not match'))
@@ -333,12 +356,12 @@ function ImportQuotes({
           ? { snapshot: raw }
           : { groups: snapshot.groups ?? snapshot }),
       }
-      const changes = await request<Change[] | null>(
+      const groups = await request<ImportGroupPreview[]>(
         'post',
         '/import/preview',
-        input
+        { ...input, grouped: true }
       )
-      return { input, changes: changes ?? [] }
+      return { input, groups }
     },
     onSuccess: (data) => {
       setPrepared(data)
@@ -357,8 +380,10 @@ function ImportQuotes({
       onClose()
     },
   })
-  function setSnapshot(value: string) {
-    setRaw(value)
+  const busy = load.isPending || preview.isPending || save.isPending
+  const showEditor = snapshot?.manual && !prepared
+  function updateSnapshot(value?: { raw: string; manual: boolean }) {
+    setSnapshot(value)
     setPrepared(undefined)
     setError('')
   }
@@ -373,12 +398,10 @@ function ImportQuotes({
           id='upstream-source'
           className={selectClass}
           value={source}
-          disabled={
-            !!channel || load.isPending || preview.isPending || save.isPending
-          }
+          disabled={!!channel || busy}
           onChange={(event) => {
             setSource(event.target.value)
-            setPrepared(undefined)
+            updateSnapshot()
           }}
         >
           <option value='kedaya'>Kedaya</option>
@@ -387,8 +410,8 @@ function ImportQuotes({
         <Button
           type='button'
           variant='outline'
-          disabled={load.isPending || preview.isPending || save.isPending}
-          onClick={() => load.mutate()}
+          disabled={busy}
+          onClick={() => load.mutate(undefined)}
         >
           <Download /> {t('Fetch latest quotes')}
         </Button>
@@ -398,30 +421,71 @@ function ImportQuotes({
             type='file'
             accept='.json,application/json'
             className='sr-only'
-            disabled={preview.isPending || save.isPending}
-            onChange={async (event) => {
+            disabled={busy}
+            onChange={(event) => {
               const file = event.currentTarget.files?.[0]
-              if (file) setSnapshot(await file.text())
+              if (file) load.mutate(file)
+              event.currentTarget.value = ''
             }}
           />
         </label>
         <Button
           type='button'
           variant='ghost'
-          onClick={() => setSnapshot(JSON.stringify(exampleSnapshot, null, 2))}
-          disabled={preview.isPending || save.isPending}
+          aria-expanded={Boolean(showEditor)}
+          disabled={busy || showEditor}
+          onClick={() =>
+            updateSnapshot({
+              raw: snapshot?.manual ? snapshot.raw : '',
+              manual: true,
+            })
+          }
+        >
+          {t('Paste JSON')}
+        </Button>
+        <Button
+          type='button'
+          variant='ghost'
+          onClick={() =>
+            updateSnapshot({
+              raw: JSON.stringify(exampleSnapshot, null, 2),
+              manual: true,
+            })
+          }
+          disabled={busy}
         >
           <Download /> {t('Load JSON example')}
         </Button>
       </div>
-      <Label htmlFor='upstream-snapshot'>{t('Quote snapshot')}</Label>
-      <Textarea
-        id='upstream-snapshot'
-        className='min-h-40 font-mono text-xs'
-        value={raw}
-        onChange={(event) => setSnapshot(event.target.value)}
-        disabled={preview.isPending || save.isPending}
-      />
+      {showEditor && (
+        <div className='flex flex-col gap-2'>
+          <Label htmlFor='upstream-snapshot'>{t('Quote snapshot')}</Label>
+          <Textarea
+            id='upstream-snapshot'
+            className='min-h-40 font-mono text-xs'
+            value={snapshot.raw}
+            autoFocus
+            onChange={(event) =>
+              updateSnapshot({ raw: event.target.value, manual: true })
+            }
+            disabled={busy}
+          />
+        </div>
+      )}
+      {load.isPending && (
+        <p role='status' className='text-muted-foreground text-sm'>
+          {t('Loading...')}
+        </p>
+      )}
+      {!load.isPending &&
+        !error &&
+        !showEditor &&
+        !prepared &&
+        snapshot?.raw.trim() && (
+          <p role='status' className='text-muted-foreground text-sm'>
+            {t('Quotes ready to preview')}
+          </p>
+        )}
       {error && (
         <p role='alert' className='text-destructive text-sm'>
           {error}
@@ -432,36 +496,33 @@ function ImportQuotes({
           <table className='w-full text-left text-sm'>
             <thead className='bg-muted'>
               <tr>
-                <th className='p-2'>{t('Group')}</th>
-                <th className='p-2'>{t('Model')}</th>
-                <th className='p-2'>{t('Status')}</th>
-                <th className='p-2'>{t('Quote snapshot')}</th>
+                <th scope='col' className='p-2'>
+                  {t('Group')}
+                </th>
+                <th scope='col' className='p-2 text-right'>
+                  {t('Models')}
+                </th>
+                <th scope='col' className='p-2 text-right'>
+                  {t('Details')}
+                </th>
               </tr>
             </thead>
             <tbody>
-              {prepared.changes.map((change) => (
-                <tr
-                  className='border-t'
-                  key={change.group + ':' + change.model}
-                >
-                  <td className='p-2'>{change.group}</td>
-                  <td className='p-2 font-mono text-xs'>{change.model}</td>
-                  <td className='p-2'>
-                    {t(changeLabels[change.status] ?? change.status)}
+              {prepared.groups.map((group) => (
+                <tr className='border-t' key={group.id}>
+                  <th
+                    scope='row'
+                    className='p-2 font-medium [overflow-wrap:anywhere]'
+                  >
+                    {group.name}
+                  </th>
+                  <td className='p-2 text-right tabular-nums'>
+                    {group.changes.length}
                   </td>
-                  <td className='p-2'>
-                    <details>
-                      <summary className='cursor-pointer'>
-                        {t('Details')}
-                      </summary>
-                      <pre className='max-w-sm overflow-auto text-xs'>
-                        {JSON.stringify(
-                          { before: change.previous, after: change.incoming },
-                          null,
-                          2
-                        )}
-                      </pre>
-                    </details>
+                  <td className='p-2 text-right'>
+                    <GroupQuotesDialog name={group.name}>
+                      <ImportQuoteChanges changes={group.changes} />
+                    </GroupQuotesDialog>
                   </td>
                 </tr>
               ))}
@@ -481,22 +542,102 @@ function ImportQuotes({
         <Button
           type='button'
           variant='outline'
-          disabled={
-            !raw.trim() || load.isPending || preview.isPending || save.isPending
-          }
-          onClick={() => preview.mutate()}
+          disabled={!snapshot?.raw.trim() || busy}
+          onClick={() => snapshot && preview.mutate(snapshot.raw)}
         >
           {t('Preview')}
         </Button>
         <Button
           type='button'
-          disabled={!prepared || load.isPending || save.isPending}
+          disabled={!prepared || busy}
           onClick={() => save.mutate()}
         >
           {t('Save import')}
         </Button>
       </div>
     </div>
+  )
+}
+
+function GroupQuotesDialog(props: { name: string; children: ReactNode }) {
+  const { t } = useTranslation()
+  return (
+    <Dialog>
+      <DialogTrigger
+        aria-label={t('Details') + ' · ' + props.name}
+        render={<Button type='button' variant='outline' size='sm' />}
+      >
+        {t('Details')}
+      </DialogTrigger>
+      <DialogContent className='flex max-h-[85dvh] min-h-0 flex-col overflow-hidden sm:max-w-5xl'>
+        <DialogHeader className='shrink-0 pr-8'>
+          <DialogTitle>{t('Group model quotes')}</DialogTitle>
+          <DialogDescription className='[overflow-wrap:anywhere]'>
+            {props.name}
+          </DialogDescription>
+        </DialogHeader>
+        <div
+          role='region'
+          aria-label={t('Group model quotes')}
+          tabIndex={0}
+          className='min-h-0 overflow-auto overscroll-contain rounded-lg border'
+        >
+          {props.children}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ImportQuoteChanges({ changes }: { changes: Change[] }) {
+  const { t } = useTranslation()
+  return (
+    <table className='w-full min-w-150 text-left text-sm'>
+      <thead className='bg-muted sticky top-0'>
+        <tr>
+          <th scope='col' className='p-2'>
+            {t('Model')}
+          </th>
+          <th scope='col' className='p-2'>
+            {t('Status')}
+          </th>
+          <th scope='col' className='p-2'>
+            {t('Previous quote')}
+          </th>
+          <th scope='col' className='p-2'>
+            {t('Incoming quote')}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {changes.map((change) => (
+          <tr key={change.model} className='border-t align-top'>
+            <th
+              scope='row'
+              className='max-w-48 p-2 font-mono text-xs font-medium [overflow-wrap:anywhere]'
+            >
+              {change.model}
+            </th>
+            <td className='p-2'>
+              {t(changeLabels[change.status] ?? change.status)}
+            </td>
+            <td className='p-2'>
+              <QuoteRates quote={change.previous} factor={1} />
+            </td>
+            <td className='p-2'>
+              <QuoteRates quote={change.incoming} factor={1} />
+            </td>
+          </tr>
+        ))}
+        {!changes.length && (
+          <tr>
+            <td colSpan={4} className='text-muted-foreground p-4'>
+              {t('No models available for this group')}
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   )
 }
 
@@ -517,7 +658,7 @@ function GroupSettings({
   const [mark, setMark] = useState(String(group.multiplier))
   const [credit, setCredit] = useState(String(group.credit_cost))
   const [historic, setHistoric] = useState(0)
-  const [editingQuote, setEditingQuote] = useState<Quote>()
+  const quotes = group.quotes ?? []
   const draft = {
     name,
     sales_name: sales,
@@ -664,88 +805,21 @@ function GroupSettings({
           </Button>
         </div>
       </form>
-      <div className='overflow-x-auto rounded-lg border'>
-        <table className='w-full min-w-150 text-left text-sm'>
-          <thead className='bg-muted'>
-            <tr>
-              <th scope='col' className='p-2'>
-                {t('Model')}
-              </th>
-              <th scope='col' className='p-2'>
-                {t('Upstream cost')}
-              </th>
-              <th scope='col' className='p-2'>
-                {t('Sale price')}
-              </th>
-              <th scope='col' className='p-2'>
-                {t('Status')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {group.quotes.map((item) => (
-              <tr key={item.quote.model_id} className='border-t align-top'>
-                <th scope='row' className='p-2 text-left text-xs font-medium'>
-                  <div className='font-mono'>
-                    {item.quote.local_model || item.quote.model_id}
-                  </div>
-                  <span className='text-muted-foreground'>
-                    #{item.quote_version}
-                  </span>
-                </th>
-                <td className='p-2'>
-                  <QuoteRates quote={item.quote} factor={1} />
-                </td>
-                <td className='p-2'>
-                  {item.sale && (
-                    <QuoteRates
-                      quote={item.quote}
-                      factor={
-                        ratio *
-                        (item.quote.unit === 'credit' ? Number(credit) : 1)
-                      }
-                      usd
-                    />
-                  )}
-                </td>
-                <td className='p-2 text-xs'>
-                  {item.sale ? t('Eligible for listing') : item.error}
-                  <Button
-                    type='button'
-                    size='xs'
-                    variant='ghost'
-                    onClick={() => setEditingQuote(item.quote)}
-                  >
-                    {t('Edit quote')}
-                  </Button>
-                  {item.last_seen_import < importedAt && (
-                    <p className='text-muted-foreground mt-1'>
-                      {t('Missing from this import')}
-                    </p>
-                  )}
-                  {item.quote.reference != null && (
-                    <details>
-                      <summary>{t('Source')}</summary>
-                      <pre className='max-w-56 overflow-auto'>
-                        {JSON.stringify(item.quote.reference, null, 2)}
-                      </pre>
-                    </details>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
+        <span className='text-sm font-medium'>
+          {t('Models in this group')} ({quotes.length})
+        </span>
+        <GroupQuotesDialog name={group.name}>
+          <SavedGroupQuotes
+            group={group}
+            quotes={quotes}
+            ratio={ratio}
+            credit={Number(credit)}
+            importedAt={importedAt}
+            onSaved={refresh}
+          />
+        </GroupQuotesDialog>
       </div>
-      {editingQuote && (
-        <QuoteEditor
-          key={editingQuote.model_id}
-          group={group}
-          quote={editingQuote}
-          onClose={() => setEditingQuote(undefined)}
-          onSaved={refresh}
-        />
-      )}
       <div className='flex flex-wrap items-center gap-2'>
         {!!group.versions?.length && (
           <select
@@ -770,7 +844,7 @@ function GroupSettings({
             dirty ||
             !group.key_hint ||
             !group.base_url ||
-            (!historic && !group.quotes.some((item) => item.sale))
+            (!historic && !quotes.some((item) => item.sale))
           }
           onClick={() => listing.mutate(true)}
         >
@@ -791,6 +865,115 @@ function GroupSettings({
         )}
       </div>
     </div>
+  )
+}
+
+function SavedGroupQuotes(props: {
+  group: GroupDetail
+  quotes: Preview[]
+  ratio: number
+  credit: number
+  importedAt: number
+  onSaved: () => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const [editingQuote, setEditingQuote] = useState<Quote>()
+  return (
+    <table className='w-full min-w-150 text-left text-sm'>
+      <thead className='bg-muted sticky top-0'>
+        <tr>
+          <th scope='col' className='p-2'>
+            {t('Model')}
+          </th>
+          <th scope='col' className='p-2'>
+            {t('Upstream cost')}
+          </th>
+          <th scope='col' className='p-2'>
+            {t('Sale price')}
+          </th>
+          <th scope='col' className='p-2'>
+            {t('Status')}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {props.quotes.map((item) => (
+          <Fragment key={item.quote.model_id}>
+            <tr className='border-t align-top'>
+              <th
+                scope='row'
+                className='max-w-48 p-2 text-left text-xs font-medium [overflow-wrap:anywhere]'
+              >
+                <div className='font-mono'>
+                  {item.quote.local_model || item.quote.model_id}
+                </div>
+                <span className='text-muted-foreground'>
+                  #{item.quote_version}
+                </span>
+              </th>
+              <td className='p-2'>
+                <QuoteRates quote={item.quote} factor={1} />
+              </td>
+              <td className='p-2'>
+                {item.sale && (
+                  <QuoteRates
+                    quote={item.quote}
+                    factor={
+                      props.ratio *
+                      (item.quote.unit === 'credit' ? props.credit : 1)
+                    }
+                    usd
+                  />
+                )}
+              </td>
+              <td className='p-2 text-xs'>
+                {item.sale ? t('Eligible for listing') : item.error}
+                <Button
+                  type='button'
+                  size='xs'
+                  variant='ghost'
+                  onClick={() => setEditingQuote(item.quote)}
+                >
+                  {t('Edit quote')}
+                </Button>
+                {item.last_seen_import < props.importedAt && (
+                  <p className='text-muted-foreground mt-1'>
+                    {t('Missing from this import')}
+                  </p>
+                )}
+                {item.quote.reference != null && (
+                  <details>
+                    <summary>{t('Source')}</summary>
+                    <pre className='max-w-56 overflow-auto'>
+                      {JSON.stringify(item.quote.reference, null, 2)}
+                    </pre>
+                  </details>
+                )}
+              </td>
+            </tr>
+            {editingQuote?.model_id === item.quote.model_id && (
+              <tr className='border-t'>
+                <td colSpan={4} className='p-2'>
+                  <QuoteEditor
+                    group={props.group}
+                    quote={editingQuote}
+                    onClose={() => setEditingQuote(undefined)}
+                    onSaved={props.onSaved}
+                  />
+                </td>
+              </tr>
+            )}
+          </Fragment>
+        ))}
+        {!props.quotes.length && (
+          <tr>
+            <td colSpan={4} className='text-muted-foreground p-4'>
+              {t('No models available for this group')}
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   )
 }
 
@@ -896,11 +1079,12 @@ function QuoteRates({
   factor,
   usd,
 }: {
-  quote: Quote
+  quote?: Quote
   factor: number
   usd?: boolean
 }) {
   const { t } = useTranslation()
+  if (!quote) return '—'
   const currency = usd || quote.unit === 'usd'
   const amount = (value?: number | null) =>
     value == null
@@ -935,6 +1119,7 @@ function QuoteRates({
               ' · ' + tier.operator + ' ' + tier.limit} ·{' '}
             {currency ? 'USD' : t('Credits')} / 1M
           </div>
+          {tier.window && <QuoteTimeWindow window={tier.window} />}
           <div>
             {t('Input')} {amount(tier.input)} · {t('Output')}{' '}
             {amount(tier.output)}
@@ -956,6 +1141,31 @@ function QuoteRates({
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+function QuoteTimeWindow(props: { window: NonNullable<Tier['window']> }) {
+  const { i18n } = useTranslation()
+  const { start_minute, end_minute, timezone, weekdays } = props.window
+  const weekday = weekdays?.length
+    ? new Intl.DateTimeFormat(i18n.resolvedLanguage, {
+        weekday: 'short',
+        timeZone: 'UTC',
+      })
+    : undefined
+  const days = weekdays
+    ?.filter((day) => day >= 0 && day <= 6)
+    .map((day) => weekday?.format(Date.UTC(2024, 0, 7 + day)))
+    .join(', ')
+  const time = (minutes: number) =>
+    [Math.floor(minutes / 60), minutes % 60]
+      .map((part) => String(part).padStart(2, '0'))
+      .join(':')
+  return (
+    <div className='text-muted-foreground'>
+      {time(start_minute)}–{time(end_minute)} {timezone}
+      {days && ' · ' + days}
     </div>
   )
 }

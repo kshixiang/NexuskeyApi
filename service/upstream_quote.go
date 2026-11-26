@@ -39,6 +39,12 @@ type UpstreamImportChange struct {
 	Incoming *UpstreamQuote `json:"incoming,omitempty"`
 }
 
+type UpstreamImportGroupPreview struct {
+	ID      string                 `json:"id"`
+	Name    string                 `json:"name"`
+	Changes []UpstreamImportChange `json:"changes"`
+}
+
 type UpstreamGroupConfig struct {
 	Name       string  `json:"name"`
 	SalesName  string  `json:"sales_name"`
@@ -130,6 +136,18 @@ func findUpstreamImportGroup(tx *gorm.DB, channelID int, item UpstreamImportGrou
 }
 
 func PreviewUpstreamImport(input UpstreamImport) ([]UpstreamImportChange, error) {
+	groups, err := PreviewUpstreamImportGroups(input)
+	if err != nil {
+		return nil, err
+	}
+	var changes []UpstreamImportChange
+	for _, group := range groups {
+		changes = append(changes, group.Changes...)
+	}
+	return changes, nil
+}
+
+func PreviewUpstreamImportGroups(input UpstreamImport) ([]UpstreamImportGroupPreview, error) {
 	if err := ValidateUpstreamImport(input); err != nil {
 		return nil, err
 	}
@@ -141,8 +159,13 @@ func PreviewUpstreamImport(input UpstreamImport) ([]UpstreamImportChange, error)
 	if input.ChannelID > 0 && input.ChannelID != channel.ID {
 		return nil, errors.New("snapshot source does not match the selected channel")
 	}
-	var changes []UpstreamImportChange
+	groups := make([]UpstreamImportGroupPreview, 0, len(input.Groups))
 	for _, item := range input.Groups {
+		preview := UpstreamImportGroupPreview{
+			ID:      upstreamGroupIdentity(item),
+			Name:    item.Name,
+			Changes: make([]UpstreamImportChange, 0, len(item.Quotes)),
+		}
 		var group model.UpstreamQuoteGroup
 		if channel.ID > 0 {
 			err := findUpstreamImportGroup(model.DB, channel.ID, item, &group)
@@ -176,13 +199,14 @@ func PreviewUpstreamImport(input UpstreamImport) ([]UpstreamImportChange, error)
 			if !quote.Confirmed {
 				change.Status = "needs_confirmation"
 			}
-			changes = append(changes, change)
+			preview.Changes = append(preview.Changes, change)
 		}
 		for _, previous := range prior {
-			changes = append(changes, UpstreamImportChange{Group: item.Name, Model: previous.Quote.ModelID, Status: "not_seen", Previous: &previous.Quote})
+			preview.Changes = append(preview.Changes, UpstreamImportChange{Group: item.Name, Model: previous.Quote.ModelID, Status: "not_seen", Previous: &previous.Quote})
 		}
+		groups = append(groups, preview)
 	}
-	return changes, nil
+	return groups, nil
 }
 
 func SaveUpstreamImport(input UpstreamImport) (model.UpstreamQuoteChannel, error) {

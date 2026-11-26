@@ -41,6 +41,7 @@ func ImportUpstreamQuotes(c *gin.Context) {
 	var input struct {
 		service.UpstreamImport
 		Snapshot string `json:"snapshot"`
+		Grouped  bool   `json:"grouped"`
 	}
 	if !upstreamQuoteBody(c, &input) {
 		return
@@ -54,6 +55,11 @@ func ImportUpstreamQuotes(c *gin.Context) {
 		input.Groups = snapshot.Groups
 	}
 	if c.Param("action") == "preview" {
+		if input.Grouped {
+			groups, err := service.PreviewUpstreamImportGroups(input.UpstreamImport)
+			upstreamQuoteResult(c, groups, err)
+			return
+		}
 		changes, err := service.PreviewUpstreamImport(input.UpstreamImport)
 		upstreamQuoteResult(c, changes, err)
 		return
