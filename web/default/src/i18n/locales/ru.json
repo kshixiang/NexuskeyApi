@@ -117,6 +117,7 @@
     "Accept Unpriced Models": "Принимать модели без цены",
     "Accepts a JSON array of model identifiers that support the Imagine API.": "Принимает JSON-массив идентификаторов моделей, поддерживающих Imagine API.",
     "Accepts comma-separated status codes and inclusive ranges.": "Принимает коды статуса, разделенные запятыми, и включающие диапазоны.",
+    "Access Claude, GPT, Gemini and more through one API.": "Используйте Claude, GPT, Gemini и другие модели через один API.",
     "Access Denied Message": "Сообщение об отказе в доступе",
     "Access Forbidden": "Доступ запрещен",
     "Access Policy (JSON)": "Политика доступа (JSON)",
@@ -252,6 +253,7 @@
     "All Types": "Все типы",
     "All Vendors": "Все поставщики",
     "1 CNY = 1 USD credit · Multi-channel": "1 CNY = 1 USD · Стабильные каналы",
+    "AI API Gateway": "Шлюз API для ИИ",
     "All Your AI Models": "Все ваши ИИ-модели",
     "All categories": "Все категории",
     "All conditions must match before this tier is used.": "All conditions must match before this tier is used.",
@@ -2580,6 +2582,7 @@
     "OhMyGPT": "OhMyGPT",
     "Old Format Template": "Шаблон старого формата",
     "Old format: Direct override. New format: Supports conditional judgment and custom JSON operations.": "Старый формат: прямое переопределение. Новый формат: поддерживает условные суждения и пользовательские операции JSON.",
+    "One API key, multiple AI models": "Один ключ API, несколько моделей ИИ",
     "Ollama": "Ollama",
     "Ollama Models": "Ollama Модели",
     "One API": "Один API",
@@ -3830,6 +3833,7 @@
     "To Lowercase": "В нижний регистр",
     "To Upper": "В верхний регистр",
     "To Uppercase": "В верхний регистр",
+    "Toggle password visibility": "Показать или скрыть пароль",
     "Today": "Сегодня",
     "Toggle columns": "Переключить столбцы",
     "Toggle navigation menu": "Переключить меню навигации",
@@ -4609,6 +4613,10 @@
     "Now": "现在",
     "{{count}} tests": "{{count}} 次测试",
     "Edit group": "Изменить группу",
-    "Edit group settings": "Изменить настройки группы"
+    "Edit group settings": "Изменить настройки группы",
+    "Domestic Models": "Китайские модели",
+    "General-purpose": "Универсальный",
+    "Set a name and choose a category and group for your API key.": "Укажите имя ключа API и выберите категорию и группу.",
+    "Expiration, quantity, quota, and access restrictions": "Срок действия, количество, квота и ограничения доступа"
   }
 }

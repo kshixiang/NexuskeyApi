@@ -277,19 +277,24 @@ func TestBuildOpenAIStyleUsageFromClaudeUsageDefaultsAggregateCacheCreationTo5m(
 
 func TestRequestOpenAI2ClaudeMessage_AdaptiveReasoningEffort(t *testing.T) {
 	tests := []struct {
-		model        string
-		effort       string
-		wantModel    string
-		wantEffort   string
-		legacyBudget bool
+		model      string
+		effort     string
+		wantModel  string
+		wantEffort string
+		reasoning  string
 	}{
 		{model: "claude-opus-4-6", effort: "low", wantModel: "claude-opus-4-6", wantEffort: "low"},
 		{model: "claude-sonnet-4-6", effort: "minimal", wantModel: "claude-sonnet-4-6", wantEffort: "low"},
 		{model: "claude-opus-4-7", effort: "xhigh", wantModel: "claude-opus-4-7", wantEffort: "xhigh"},
-		{model: "claude-opus-4-7-high", effort: "medium", wantModel: "claude-opus-4-7", wantEffort: "medium", legacyBudget: true},
+		{model: "claude-opus-4-7-high", effort: "medium", wantModel: "claude-opus-4-7", wantEffort: "medium", reasoning: `{"max_tokens":2048}`},
+		{model: "claude-opus-4-7-high", wantModel: "claude-opus-4-7", wantEffort: "high", reasoning: `{"max_tokens":2048}`},
 		{model: "claude-opus-4-8", effort: "high", wantModel: "claude-opus-4-8", wantEffort: "high"},
 		{model: "claude-fable-5-2", effort: "max", wantModel: "claude-fable-5-2", wantEffort: "max"},
 		{model: "us.anthropic.claude-opus-4-6-v1", effort: "medium", wantModel: "us.anthropic.claude-opus-4-6-v1", wantEffort: "medium"},
+		{model: "claude-sonnet-5-5", wantModel: "claude-sonnet-5-5", wantEffort: "medium", reasoning: `{"max_tokens":2048}`},
+		{model: "claude-sonnet-5-5", effort: "low", wantModel: "claude-sonnet-5-5", wantEffort: "low", reasoning: `{"max_tokens":4096}`},
+		{model: "claude-sonnet-5-5", wantModel: "claude-sonnet-5-5", wantEffort: "low", reasoning: `{"effort":"low"}`},
+		{model: "claude-sonnet-5-5-thinking", wantModel: "claude-sonnet-5-5", wantEffort: "high"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
@@ -298,8 +303,8 @@ func TestRequestOpenAI2ClaudeMessage_AdaptiveReasoningEffort(t *testing.T) {
 				ReasoningEffort: tt.effort,
 				Messages:        []dto.Message{{Role: "user", Content: "Hello"}},
 			}
-			if tt.legacyBudget {
-				request.Reasoning = []byte(`{"max_tokens":2048}`)
+			if tt.reasoning != "" {
+				request.Reasoning = []byte(tt.reasoning)
 			}
 
 			converted, err := RequestOpenAI2ClaudeMessage(nil, request)

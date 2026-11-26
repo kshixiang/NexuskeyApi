@@ -16,18 +16,72 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { Skeleton } from '@/components/ui/skeleton'
+import { LanguageSwitcher } from '@/components/language-switcher'
+import { ThemeSwitch } from '@/components/theme-switch'
+import './auth-layout.css'
 
-type AuthLayoutProps = {
-  children: React.ReactNode
-}
+type AuthLayoutProps = { children: ReactNode } & (
+  | { variant?: 'centered' }
+  | { variant: 'split'; title: string; description?: ReactNode }
+)
 
-export function AuthLayout({ children }: AuthLayoutProps) {
+export function AuthLayout(props: AuthLayoutProps) {
+  const { children } = props
   const { t } = useTranslation()
   const { systemName, logo, loading } = useSystemConfig()
+
+  if (props.variant === 'split') {
+    return (
+      <main className='auth-page'>
+        <header className='auth-header'>
+          <Link to='/' className='auth-brand'>
+            {loading ? (
+              <Skeleton className='auth-brand__logo' />
+            ) : (
+              <img src={logo} alt='' className='auth-brand__logo' />
+            )}
+            <span>{systemName}</span>
+          </Link>
+          <div className='auth-controls'>
+            <LanguageSwitcher variant='code' />
+            <ThemeSwitch />
+          </div>
+        </header>
+        <aside className='auth-intro'>
+          <p className='auth-intro__name'>{systemName}</p>
+          <p className='auth-intro__title'>{t('AI API Gateway')}</p>
+          <p className='auth-intro__description'>
+            {t('Access Claude, GPT, Gemini and more through one API.')}
+          </p>
+          <ul>
+            <li>
+              {t(
+                'Use our unified OpenAI-compatible endpoint in your applications'
+              )}
+            </li>
+            <li>
+              {t('Support for high concurrency with automatic load balancing')}
+            </li>
+            <li>{t('Pay-as-you-go with real-time usage monitoring')}</li>
+          </ul>
+        </aside>
+        <div className='auth-panel'>
+          <div className='auth-content'>
+            <div className='auth-heading'>
+              <h1>{props.title}</h1>
+              {props.description && <p>{props.description}</p>}
+            </div>
+            {children}
+          </div>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <div className='relative grid h-svh max-w-none'>

@@ -18,48 +18,59 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import * as React from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from './ui/button'
-import { Input } from './ui/input'
+import { useTranslation } from 'react-i18next'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from './ui/input-group'
 
 type PasswordInputProps = Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
   'type'
 > & {
   ref?: React.Ref<HTMLInputElement>
+  startIcon?: React.ReactNode
 }
 
 export function PasswordInput({
   className,
   disabled,
   ref,
+  startIcon,
   ...props
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = React.useState(false)
+  const { t } = useTranslation()
 
   return (
-    <div className={cn('relative rounded-md', className)}>
-      <Input
+    <InputGroup className={className}>
+      {startIcon && (
+        <InputGroupAddon aria-hidden='true'>{startIcon}</InputGroupAddon>
+      )}
+      <InputGroupInput
         type={showPassword ? 'text' : 'password'}
         ref={ref}
         disabled={disabled}
         {...props}
+        data-slot='input-group-control'
       />
-      <Button
-        type='button'
-        size='icon'
-        variant='ghost'
-        disabled={disabled}
-        className='text-muted-foreground absolute end-1 top-1/2 h-6 w-6 -translate-y-1/2 rounded-md'
-        onClick={() => setShowPassword((prev) => !prev)}
-        aria-label='Toggle password visibility'
-      >
-        {showPassword ? (
-          <Eye size={18} aria-hidden='true' />
-        ) : (
-          <EyeOff size={18} aria-hidden='true' />
-        )}
-      </Button>
-    </div>
+      <InputGroupAddon align='inline-end'>
+        <InputGroupButton
+          size='icon-xs'
+          disabled={disabled}
+          onClick={() => setShowPassword((prev) => !prev)}
+          aria-label={t('Toggle password visibility')}
+          aria-pressed={showPassword}
+        >
+          {showPassword ? (
+            <EyeOff aria-hidden='true' />
+          ) : (
+            <Eye aria-hidden='true' />
+          )}
+        </InputGroupButton>
+      </InputGroupAddon>
+    </InputGroup>
   )
 }

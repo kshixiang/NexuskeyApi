@@ -257,6 +257,7 @@ func AddToken(c *gin.Context) {
 	cleanToken := model.Token{
 		UserId:             c.GetInt("id"),
 		Name:               token.Name,
+		Category:           token.Category,
 		Key:                key,
 		CreatedTime:        common.GetTimestamp(),
 		AccessedTime:       common.GetTimestamp(),
@@ -297,7 +298,10 @@ func DeleteToken(c *gin.Context) {
 func UpdateToken(c *gin.Context) {
 	userId := c.GetInt("id")
 	statusOnly := c.Query("status_only")
-	token := model.Token{}
+	token := struct {
+		model.Token
+		Category *string `json:"category" binding:"omitempty,oneof=general openai claude gemini domestic other"`
+	}{}
 	err := c.ShouldBindJSON(&token)
 	if err != nil {
 		common.ApiError(c, err)
@@ -338,6 +342,9 @@ func UpdateToken(c *gin.Context) {
 	} else {
 		// If you add more fields, please also update token.Update()
 		cleanToken.Name = token.Name
+		if token.Category != nil {
+			cleanToken.Category = *token.Category
+		}
 		cleanToken.ExpiredTime = token.ExpiredTime
 		cleanToken.RemainQuota = token.RemainQuota
 		cleanToken.UnlimitedQuota = token.UnlimitedQuota

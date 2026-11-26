@@ -1,0 +1,282 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+
+.auth-page {
+  --background: #f9fafc;
+  --foreground: #111827;
+  --muted-foreground: #516075;
+  --input: #aebace;
+  --border: #c3ceda;
+  --primary: #087b73;
+  --primary-foreground: #fff;
+  --ring: var(--primary);
+  --field-background: #fff;
+  --provider-background: #edf2f7;
+  --control-height: 2.875rem;
+
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 100svh;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.dark .auth-page {
+  --background: #101829;
+  --foreground: #f8fafc;
+  --muted-foreground: #a3b2c8;
+  --input: #46566b;
+  --border: #38495f;
+  --primary: #4de0ce;
+  --field-background: #0f1728;
+  --provider-background: #1c2738;
+}
+
+.auth-header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem clamp(1.5rem, 2vw, 2.25rem);
+}
+
+.auth-brand,
+.auth-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.auth-brand {
+  min-width: 0;
+  max-width: calc(50% - 1rem);
+  color: #f8fafc;
+  font-size: 0.9375rem;
+  font-weight: 650;
+}
+
+.auth-brand__logo {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.6rem;
+}
+
+.auth-brand img {
+  padding: 0.2rem;
+  background: #f8fafc;
+  object-fit: contain;
+}
+
+.auth-brand span {
+  overflow-wrap: anywhere;
+}
+
+.auth-controls {
+  flex: none;
+  gap: 0.25rem;
+  color: var(--muted-foreground);
+}
+
+.auth-intro {
+  padding: clamp(6.75rem, 12vh, 9rem) clamp(1.5rem, 2vw, 2.25rem) 3rem;
+  border-inline-end: 1px solid #263346;
+  background:
+    linear-gradient(90deg, #46a9aa19 1px, transparent 1px) 1.75rem 2.5rem / 3rem
+      3rem,
+    linear-gradient(#46a9aa19 1px, transparent 1px) 1.75rem 2.5rem / 3rem 3rem,
+    radial-gradient(ellipse 42% 40% at 70% 50%, #07373e, transparent),
+    radial-gradient(ellipse 55% 65% at 24% 82%, #111d3b, transparent),
+    #050916;
+  color: #e2ecfa;
+}
+
+.auth-intro__name {
+  color: #60e6d4;
+  font-size: clamp(2.75rem, 3.45vw, 3.5rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.auth-intro__title {
+  margin-top: 0.85rem;
+  color: #f8fafc;
+  font-size: clamp(1.125rem, 1.35vw, 1.375rem);
+}
+
+.auth-intro__description {
+  max-width: 29rem;
+  margin-top: 1.6rem;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.auth-intro ul {
+  display: grid;
+  gap: 0.7rem;
+  max-width: 34rem;
+  margin-top: 2.2rem;
+  padding-inline-start: 1.25rem;
+  color: #b9cadf;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  list-style: disc;
+}
+
+.auth-intro li::marker {
+  color: #27c4b8;
+}
+
+.auth-panel {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 5.25rem clamp(1.5rem, 4vw, 4rem) 6.75rem;
+}
+
+.auth-content,
+.auth-form,
+.auth-oauth {
+  display: grid;
+  min-width: 0;
+}
+
+.auth-content {
+  gap: 1.75rem;
+  width: min(100%, 28rem);
+}
+
+.auth-heading h1 {
+  font-size: clamp(1.875rem, 2.5vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+
+.auth-heading p {
+  margin-top: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.9375rem;
+}
+
+.auth-heading a {
+  color: var(--primary);
+  font-weight: 500;
+  text-underline-offset: 0.25rem;
+}
+
+.auth-heading a:hover {
+  text-decoration: underline;
+}
+
+.auth-form {
+  gap: 1.25rem;
+}
+
+.auth-oauth {
+  gap: 0.85rem;
+}
+
+.auth-input,
+.auth-submit,
+.auth-code-button {
+  height: var(--control-height);
+  border-radius: 0.75rem;
+}
+
+.auth-input {
+  background: var(--field-background);
+}
+
+.auth-input [data-align='inline-start'] {
+  padding-inline-start: 0.875rem;
+}
+
+.auth-input input {
+  height: 100%;
+  font-size: 1rem;
+}
+
+.auth-panel .auth-provider {
+  height: auto;
+  min-width: 0;
+  min-height: var(--control-height);
+  padding-block: 0.6rem;
+  border-radius: 0.75rem;
+  background: var(--provider-background);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.auth-panel .auth-provider:hover:not(:disabled) {
+  border-color: var(--ring);
+}
+
+.auth-submit {
+  --button-start: #087f78;
+  --button-end: #08726c;
+
+  background: linear-gradient(105deg, var(--button-start), var(--button-end));
+  color: #fff;
+  box-shadow: 0 3px 10px #0b9c8a32;
+}
+
+.dark .auth-submit {
+  --button-start: #15b7a7;
+  --button-end: #0d988c;
+
+  color: #061e22;
+}
+
+.auth-submit:hover:not(:disabled) {
+  filter: brightness(1.09);
+}
+
+@media (max-width: 767px) {
+  .auth-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+  }
+
+  .auth-header {
+    position: static;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .auth-brand {
+    max-width: 65%;
+    color: var(--foreground);
+  }
+
+  .auth-intro {
+    display: none;
+  }
+
+  .auth-panel {
+    padding: 2.5rem 1.25rem;
+  }
+}

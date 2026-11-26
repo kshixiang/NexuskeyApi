@@ -117,6 +117,7 @@
     "Accept Unpriced Models": "Accept Unpriced Models",
     "Accepts a JSON array of model identifiers that support the Imagine API.": "Accepts a JSON array of model identifiers that support the Imagine API.",
     "Accepts comma-separated status codes and inclusive ranges.": "Accepts comma-separated status codes and inclusive ranges.",
+    "Access Claude, GPT, Gemini and more through one API.": "Access Claude, GPT, Gemini and more through one API.",
     "Access Denied Message": "Access Denied Message",
     "Access Forbidden": "Access Forbidden",
     "Access Policy (JSON)": "Access Policy (JSON)",
@@ -252,6 +253,7 @@
     "All Types": "All Types",
     "All Vendors": "All Vendors",
     "1 CNY = 1 USD credit · Multi-channel": "1 CNY = 1 USD · Stable channels",
+    "AI API Gateway": "AI API Gateway",
     "All Your AI Models": "All Your AI Models",
     "All categories": "All categories",
     "All conditions must match before this tier is used.": "All conditions must match before this tier is used.",
@@ -2588,6 +2590,7 @@
     "OhMyGPT": "OhMyGPT",
     "Old Format Template": "Old Format Template",
     "Old format: Direct override. New format: Supports conditional judgment and custom JSON operations.": "Old format: Direct override. New format: Supports conditional judgment and custom JSON operations.",
+    "One API key, multiple AI models": "One API key, multiple AI models",
     "Ollama": "Ollama",
     "Ollama Models": "Ollama Models",
     "One API": "One API",
@@ -3839,6 +3842,7 @@
     "To Lowercase": "To Lowercase",
     "To Upper": "To Upper",
     "To Uppercase": "To Uppercase",
+    "Toggle password visibility": "Toggle password visibility",
     "Today": "Today",
     "Toggle columns": "Toggle columns",
     "Toggle navigation menu": "Toggle navigation menu",
@@ -4633,6 +4637,10 @@
     "Total Token Count": "Total Token Count",
     "First Token Latency": "First Token Latency",
     "Total Duration": "Total Duration",
-    "Output Speed": "Output Speed"
+    "Output Speed": "Output Speed",
+    "Domestic Models": "Domestic Models",
+    "General-purpose": "General-purpose",
+    "Set a name and choose a category and group for your API key.": "Set a name and choose a category and group for your API key.",
+    "Expiration, quantity, quota, and access restrictions": "Expiration, quantity, quota, and access restrictions"
   }
 }

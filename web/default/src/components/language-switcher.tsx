@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback } from 'react'
-import { Languages, Check } from 'lucide-react'
+import { Languages, Check, ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { api } from '@/lib/api'
@@ -39,9 +39,16 @@ const languages = [
   { code: 'vi', label: 'Tiếng Việt' },
 ]
 
-export function LanguageSwitcher() {
+export function LanguageSwitcher({
+  variant = 'icon',
+}: {
+  variant?: 'icon' | 'code'
+}) {
   const { i18n, t } = useTranslation()
   const user = useAuthStore((s) => s.auth.user)
+  const activeCode = (i18n.resolvedLanguage ?? i18n.language ?? 'en').split(
+    '-'
+  )[0]
 
   const handleChangeLanguage = useCallback(
     async (code: string) => {
@@ -60,9 +67,22 @@ export function LanguageSwitcher() {
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger
-        render={<Button variant='ghost' size='icon' className='h-9 w-9' />}
+        render={
+          <Button
+            variant='ghost'
+            size={variant === 'code' ? 'sm' : 'icon'}
+            className={variant === 'code' ? 'h-9 px-2.5' : 'size-9'}
+          />
+        }
       >
-        <Languages className='size-[1.2rem]' />
+        {variant === 'code' ? (
+          <>
+            <span aria-hidden='true'>{activeCode.toUpperCase()}</span>
+            <ChevronDown data-icon='inline-end' aria-hidden='true' />
+          </>
+        ) : (
+          <Languages className='size-[1.2rem]' aria-hidden='true' />
+        )}
         <span className='sr-only'>{t('Change language')}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end'>
@@ -74,7 +94,7 @@ export function LanguageSwitcher() {
             {lang.label}
             <Check
               size={14}
-              className={cn('ms-auto', i18n.language !== lang.code && 'hidden')}
+              className={cn('ms-auto', activeCode !== lang.code && 'hidden')}
             />
           </DropdownMenuItem>
         ))}

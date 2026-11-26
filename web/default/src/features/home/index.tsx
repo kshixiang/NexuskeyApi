@@ -21,7 +21,8 @@ import { useAuthStore } from '@/stores/auth-store'
 import { Markdown } from '@/components/ui/markdown'
 import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
-import { CTA, Features, Hero, HowItWorks, Stats } from './components'
+import { Hero } from './components'
+import './home.css'
 import { useHomePageContent } from './hooks'
 
 export function Home() {
@@ -61,15 +62,11 @@ export function Home() {
   }
 
   return (
-    <PublicLayout showMainContainer={false}>
-      <div className='dark home-supabase-marketing min-h-svh bg-background text-foreground'>
+    <PublicLayout className='home-landing' showMainContainer={false}>
+      <main className='home-main'>
         <Hero isAuthenticated={isAuthenticated} />
-        <Stats />
-        <Features />
-        <HowItWorks />
-        <CTA isAuthenticated={isAuthenticated} />
-        <Footer />
-      </div>
+      </main>
+      <Footer />
     </PublicLayout>
   )
 }

@@ -117,6 +117,7 @@
     "Accept Unpriced Models": "価格設定されていないモデルを許可",
     "Accepts a JSON array of model identifiers that support the Imagine API.": "Imagine APIをサポートするモデル識別子のJSON配列を受け入れます。",
     "Accepts comma-separated status codes and inclusive ranges.": "カンマ区切りのステータスコードと包含範囲を受け入れます。",
+    "Access Claude, GPT, Gemini and more through one API.": "ひとつの API で Claude、GPT、Gemini などのモデルを利用できます。",
     "Access Denied Message": "アクセス拒否メッセージ",
     "Access Forbidden": "アクセス禁止",
     "Access Policy (JSON)": "アクセスポリシー (JSON)",
@@ -252,6 +253,7 @@
     "All Types": "すべてのタイプ",
     "All Vendors": "すべてのベンダー",
     "1 CNY = 1 USD credit · Multi-channel": "1元=1ドル · 安定チャネル",
+    "AI API Gateway": "AI API ゲートウェイ",
     "All Your AI Models": "すべてのAIモデル",
     "All categories": "すべてのカテゴリ",
     "All conditions must match before this tier is used.": "この階層を使用するには、すべての条件に一致する必要があります。",
@@ -2580,6 +2582,7 @@
     "OhMyGPT": "OhMyGPT",
     "Old Format Template": "旧形式テンプレート",
     "Old format: Direct override. New format: Supports conditional judgment and custom JSON operations.": "旧形式: 直接上書き。新形式: 条件判定とカスタムJSON操作をサポートします。",
+    "One API key, multiple AI models": "ひとつの API キーで、複数の AI モデルを",
     "Ollama": "Ollama",
     "Ollama Models": "Ollamaモデル",
     "One API": "1つのAPI",
@@ -3830,6 +3833,7 @@
     "To Lowercase": "小文字化",
     "To Upper": "大文字に変換",
     "To Uppercase": "大文字化",
+    "Toggle password visibility": "パスワードの表示を切り替える",
     "Today": "今日",
     "Toggle columns": "列の切り替え",
     "Toggle navigation menu": "ナビゲーションメニューの切り替え",
@@ -4609,6 +4613,10 @@
     "Now": "现在",
     "{{count}} tests": "{{count}} 次测试",
     "Edit group": "グループを編集",
-    "Edit group settings": "グループ設定を編集"
+    "Edit group settings": "グループ設定を編集",
+    "Domestic Models": "中国製モデル",
+    "General-purpose": "汎用",
+    "Set a name and choose a category and group for your API key.": "APIキーに名前を付け、カテゴリとグループを選択してください。",
+    "Expiration, quantity, quota, and access restrictions": "有効期限、数量、クォータ、アクセス制限"
   }
 }

@@ -131,5 +131,15 @@ export function buildCCSwitchImportURL(input: CCSwitchImportInput): string {
     ['usageAutoInterval', '30']
   )
 
-  return `ccswitch://v1/import?${new URLSearchParams(entries).toString()}`
+  const params = new URLSearchParams(entries)
+  if (input.app === 'workbuddy') {
+    const url = chatCompletionsEndpoint(endpoint)
+    params.set('endpoint', url.toString())
+    params.set('apiFormat', 'openai_chat')
+    url.pathname = url.pathname.replace(/(?:\/v1)?\/chat\/completions$/, '')
+    url.search = ''
+    params.set('usageBaseUrl', url.toString().replace(/\/+$/, ''))
+  }
+
+  return `ccswitch://v1/import?${params.toString()}`
 }

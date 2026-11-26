@@ -79,6 +79,12 @@ const APP_CONFIGS = {
     defaultName: 'My CodeBuddy',
     modelFields: [{ key: 'model', labelKey: 'Primary Model', required: true }],
   },
+  workbuddy: {
+    label: 'WorkBuddy',
+    importApp: 'workbuddy',
+    defaultName: 'My WorkBuddy',
+    modelFields: [{ key: 'model', labelKey: 'Primary Model', required: true }],
+  },
 } as const
 
 type AppType = keyof typeof APP_CONFIGS
@@ -150,7 +156,7 @@ export function CCSwitchDialog(props: Props) {
 
   const handleSubmit = async (format: CodeBuddyConfigFormat = 'cc-switch') => {
     const model =
-      app === 'codebuddy'
+      app === 'codebuddy' || app === 'workbuddy'
         ? models.model?.trim()
         : models.model
     if (!model) {
@@ -175,7 +181,7 @@ export function CCSwitchDialog(props: Props) {
       endpoint,
       homepage: serverAddress,
       apiKey: key,
-      models: models,
+      models: app === 'workbuddy' ? { model } : models,
     })
     window.open(url, '_self')
     props.onOpenChange(false)

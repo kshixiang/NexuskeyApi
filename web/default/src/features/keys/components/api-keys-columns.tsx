@@ -23,6 +23,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { getUserGroups } from '@/lib/api'
 import { formatQuota, formatTimestampToDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -35,6 +36,7 @@ import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { getSystemOptions } from '@/features/system-settings/api'
 import { API_KEY_STATUSES } from '../constants'
+import { getApiKeyCategoryLabel } from '../lib/api-key-category'
 import { type ApiKey } from '../types'
 import {
   ApiKeyCell,
@@ -119,6 +121,17 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
         </div>
       ),
       meta: { label: t('Name'), mobileTitle: true },
+    },
+    {
+      accessorKey: 'category',
+      header: t('Category'),
+      cell: ({ row }) => (
+        <Badge variant='secondary'>
+          {getApiKeyCategoryLabel(row.original.category, t)}
+        </Badge>
+      ),
+      enableSorting: false,
+      meta: { label: t('Category') },
     },
     {
       accessorKey: 'status',

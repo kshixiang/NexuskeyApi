@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ReactNode } from 'react'
+import { Google } from '@lobehub/icons'
 import { useTranslation } from 'react-i18next'
 import {
   IconDiscord,
@@ -35,6 +36,7 @@ type OAuthProvidersProps = {
   className?: string
   onWeChatLogin?: () => void
   isWeChatLoading?: boolean
+  layout?: 'stack' | 'grid'
 }
 
 type ProviderButton = {
@@ -51,6 +53,7 @@ export function OAuthProviders({
   className,
   onWeChatLogin,
   isWeChatLoading = false,
+  layout = 'stack',
 }: OAuthProvidersProps) {
   const { t } = useTranslation()
   const {
@@ -80,7 +83,11 @@ export function OAuthProviders({
   if (status?.github_oauth) {
     providerButtons.push({
       key: 'github',
-      label: githubButtonText || t('Continue with GitHub'),
+      label: githubButtonDisabled
+        ? githubButtonText
+        : layout === 'grid'
+          ? t('GitHub')
+          : githubButtonText || t('Continue with GitHub'),
       onClick: handleGitHubLogin,
       icon: <IconGithub className='h-4 w-4' />,
       disabled: githubButtonDisabled,
@@ -104,14 +111,15 @@ export function OAuthProviders({
     })
   }
 
-  if (status?.linuxdo_oauth) {
-    providerButtons.push({
-      key: 'linuxdo',
-      label: t('Continue with LinuxDO'),
-      onClick: handleLinuxDOLogin,
-      icon: <IconLinuxDo className='h-4 w-4' />,
-    })
-  }
+  const linuxDO = status?.linuxdo_oauth
+    ? {
+        key: 'linuxdo',
+        label: t('Continue with LinuxDO'),
+        onClick: handleLinuxDOLogin,
+        icon: <IconLinuxDo className='h-4 w-4' />,
+      }
+    : undefined
+  if (linuxDO && layout === 'stack') providerButtons.push(linuxDO)
 
   if (status?.telegram_oauth) {
     providerButtons.push({
@@ -125,39 +133,69 @@ export function OAuthProviders({
   const customProviders = status?.custom_oauth_providers
   if (customProviders && customProviders.length > 0) {
     for (const provider of customProviders) {
+      const isGoogle =
+        layout === 'grid' &&
+        [provider.slug, provider.name].some(
+          (value) => value.toLowerCase() === 'google'
+        )
       providerButtons.push({
         key: `custom-${provider.slug}`,
-        label: t('Continue with {{name}}', { name: provider.name }),
+        label: isGoogle
+          ? 'Google'
+          : t('Continue with {{name}}', { name: provider.name }),
         onClick: () => handleCustomOAuthLogin(provider),
+        icon: isGoogle ? (
+          <Google.Color size={18} aria-hidden='true' />
+        ) : undefined,
       })
     }
   }
 
+  if (linuxDO && layout === 'grid') providerButtons.push(linuxDO)
+
   if (providerButtons.length === 0) return null
 
+  const pairedProviderCount =
+    providerButtons.length - Number(Boolean(linuxDO && layout === 'grid'))
+
   return (
-    <div className={cn('space-y-3', className)}>
+    <div
+      className={cn(layout === 'grid' ? 'auth-oauth' : 'space-y-3', className)}
+    >
       <div className='relative'>
         <div className='absolute inset-0 flex items-center'>
           <span className='w-full border-t' />
         </div>
-        <div className='relative flex justify-center text-xs uppercase'>
-          <span className='bg-background text-muted-foreground px-2'>
+        <div className='relative flex justify-center text-xs'>
+          <span className='bg-background text-muted-foreground px-3'>
             {t('Or continue with')}
           </span>
         </div>
       </div>
 
-      <div className='flex flex-col gap-2'>
+      <div
+        className={cn(
+          'gap-2.5',
+          layout === 'grid' ? 'grid grid-cols-2' : 'flex flex-col'
+        )}
+      >
         {providerButtons.map(
-          ({ key, label, onClick, icon, disabled: extraDisabled }) => (
+          ({ key, label, onClick, icon, disabled: extraDisabled }, index) => (
             <Button
               key={key}
               variant='outline'
               type='button'
               disabled={disabled || isLoading || extraDisabled}
               onClick={onClick}
-              className='h-11 w-full justify-center gap-2 rounded-lg'
+              className={cn(
+                'h-11 w-full justify-center gap-2 rounded-lg',
+                layout === 'grid' && 'auth-provider',
+                layout === 'grid' &&
+                  (key === 'linuxdo' ||
+                    (pairedProviderCount % 2 === 1 &&
+                      index === pairedProviderCount - 1)) &&
+                  'col-span-full'
+              )}
             >
               {icon}
               {label}

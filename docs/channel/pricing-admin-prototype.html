@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>本站售价 · 后台界面草图</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182137;
+      --muted: #59677c;
+      --line: #e4e8f0;
+      --surface: #f5f7fb;
+      --blue: #3359e0;
+      --green: #176748;
+      --amber: #865217;
+      font: 14px/1.55 Inter, "Microsoft YaHei UI", "PingFang SC", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--surface); }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    [hidden] { display: none !important; }
+    header, footer { background: #fff; }
+    header { border-bottom: 1px solid var(--line); }
+    .bar, main, .footer-inner { max-width: 1400px; margin: auto; padding-inline: 48px; }
+    .bar { display: flex; align-items: center; justify-content: space-between; min-height: 66px; gap: 16px; }
+    .brand, .crumb, .actions, .field, .status-line { display: flex; align-items: center; gap: 10px; }
+    .brand { font-size: 15px; font-weight: 750; }
+    .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--blue); color: #fff; font: 700 14px/1 Inter, sans-serif; }
+    .crumb { color: var(--muted); font-size: 13px; }
+    .crumb strong { color: var(--ink); }
+    .prototype { color: #4a5774; background: #eef1f7; padding: 4px 10px; border-radius: 6px; font-size: 12px; }
+    main { padding-top: 25px; padding-bottom: 24px; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 32px; font-weight: 760; letter-spacing: -.6px; }
+    h2 { font-size: 17px; font-weight: 750; }
+    .sub { color: var(--muted); font-size: 13px; }
+    .title { display: flex; justify-content: space-between; align-items: end; gap: 16px; }
+    .nav { display: flex; gap: 26px; margin: 10px 0 17px; border-bottom: 1px solid var(--line); }
+    .nav button { background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 10px 2px; color: var(--muted); }
+    .nav [aria-selected="true"] { color: var(--blue); border-color: var(--blue); font-weight: 750; }
+    .context { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; padding: 12px 16px; margin-bottom: 16px; background: #fff; border: 1px solid var(--line); border-radius: 11px; }
+    .field { font-size: 13px; color: var(--muted); }
+    .field select, .field strong { min-width: 122px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: #f9faff; color: var(--ink); }
+    .field strong { font-weight: 650; }
+    .version { margin-left: auto; color: var(--muted); font-size: 13px; }
+    .badge { display: inline-block; border-radius: 6px; padding: 3px 8px; font-size: 12px; font-weight: 650; white-space: nowrap; }
+    .badge.draft { background: #fff1d9; color: var(--amber); }
+    .badge.good { background: #eaf6ef; color: var(--green); }
+    .badge.neutral { background: #edf1f8; color: #45526c; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.78fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+    .stack { display: grid; gap: 16px; }
+    .card { min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 3px 10px #23315c05; }
+    .card-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; padding: 16px 18px 11px; }
+    .card-head p { margin-top: 2px; }
+    .scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { background: #f8f9fd; color: var(--muted); font-size: 12px; font-weight: 650; white-space: nowrap; }
+    th, td { padding: 8px 12px; border-bottom: 1px solid #edf0f5; }
+    th:first-child, td:first-child { padding-left: 18px; }
+    th:last-child, td:last-child { padding-right: 18px; }
+    tbody tr:last-child td { border-bottom: 0; }
+    td b { font-weight: 650; }
+    td small { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .num, code { font-family: "IBM Plex Mono", Consolas, "Microsoft YaHei UI", monospace; font-variant-numeric: tabular-nums; }
+    .num { white-space: nowrap; }
+    .input-wrap { display: inline-flex; align-items: center; gap: 5px; background: #fff; border: 1px solid #dce3f0; border-radius: 7px; padding: 3px 8px; color: var(--muted); }
+    .input-wrap:focus-within { border-color: var(--blue); }
+    .input-wrap input { width: 79px; border: 0; background: transparent; color: var(--ink); outline: 0; font-size: 13px; }
+    .source { color: #40506c; }
+    .card-foot { padding: 10px 18px; border-top: 1px solid #edf0f5; color: var(--muted); font-size: 12px; }
+    .text-button { padding: 2px 0; border: 0; background: transparent; color: var(--blue); font-size: 13px; font-weight: 700; white-space: nowrap; }
+    .scenario { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 18px 12px; }
+    .chip { border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; background: #fff; color: var(--muted); font-size: 12px; }
+    .chip[aria-pressed="true"] { color: #2447c6; background: #edf1ff; border-color: #dbe3ff; font-weight: 700; }
+    .scenario-desc { margin: 0 18px 12px; min-height: 36px; color: var(--muted); font-size: 12px; }
+    dl { margin: 0 18px 12px; border-top: 1px solid var(--line); padding-top: 5px; }
+    dl div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; }
+    dt { color: var(--muted); }
+    dd { margin: 0; font-weight: 700; }
+    dl .margin { margin-top: 3px; padding: 8px 10px; background: #edf7f1; border-radius: 7px; }
+    .margin dt, .margin dd { color: var(--green); }
+    .checks { display: grid; gap: 8px; margin: 0 18px 14px; padding: 0; list-style: none; font-size: 13px; }
+    .checks li { display: flex; align-items: baseline; gap: 8px; }
+    .check-mark { color: var(--green); font-weight: 750; }
+    .warning { margin: 0 18px 16px; background: #fff7e8; border: 1px solid #f5e4be; border-radius: 8px; padding: 10px 12px; color: var(--amber); font-size: 12px; }
+    .warning p { margin-top: 3px; }
+    footer { position: sticky; bottom: 0; border-top: 1px solid var(--line); }
+    .footer-inner { min-height: 65px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .button { border: 1px solid #dbe1ee; border-radius: 8px; color: var(--ink); background: #fff; padding: 8px 13px; font-weight: 700; }
+    .button.primary { color: #fff; background: var(--blue); border-color: var(--blue); }
+    dialog { width: min(490px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 12px; padding: 22px; color: var(--ink); }
+    dialog::backdrop { background: #141d3e65; }
+    dialog p { margin: 10px 0 17px; }
+    dialog code { display: block; padding: 12px; background: var(--surface); border-radius: 7px; overflow-wrap: anywhere; }
+    @media(max-width: 980px) {
+      .bar, main, .footer-inner { padding-inline: 22px; }
+      .grid { grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); }
+    }
+    @media(max-width: 770px) {
+      .grid { grid-template-columns: minmax(0, 1fr); }
+      .crumb { display: none; }
+      .version { margin-left: 0; }
+      .footer-inner { flex-wrap: wrap; padding-block: 9px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">N</span> 管理后台</div>
+      <div class="crumb">系统设置 <span aria-hidden="true">/</span> 模型与渠道 <span aria-hidden="true">/</span> <strong>定价管理</strong></div>
+      <span class="prototype">界面草图 · 示例数据</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="title">
+      <div>
+        <h1 id="page-title">本站售价</h1>
+        <p class="sub" id="page-subtitle">按本地模型与销售分组配置对客价格。</p>
+      </div>
+      <button class="button" id="history" type="button">版本记录</button>
+    </div>
+    <nav class="nav" aria-label="定价管理" role="tablist">
+      <button role="tab" id="catalog-tab" aria-controls="catalog" aria-selected="false" type="button">报价目录</button>
+      <button role="tab" id="sale-tab" aria-controls="sale" aria-selected="true" type="button">本站售价</button>
+    </nav>
+
+    <section id="sale" role="tabpanel" aria-labelledby="sale-tab">
+      <div class="context">
+        <span class="field">本地模型 <strong><code>kimi-k3</code></strong></span>
+        <label class="field" for="group">销售分组
+          <select id="group"><option>1004-Kimi</option><option>1005-Kimi</option></select>
+        </label>
+        <span class="field">计费方式 <strong>表达式计费</strong></span>
+        <span class="version">当前线上 <strong id="live-version">v2</strong> <span class="badge draft" id="draft-version">v3 草稿</span></span>
+      </div>
+
+      <div class="grid">
+        <div class="stack">
+          <section class="card" aria-labelledby="rates-title">
+            <div class="card-head">
+              <div><h2 id="rates-title">Token 单价</h2><p class="sub">基础档 · USD / 百万 Token</p></div>
+              <button class="text-button" id="expression" type="button">查看计费表达式 ↗</button>
+            </div>
+            <div class="scroll">
+              <table aria-label="Token 单价">
+                <thead><tr><th scope="col">计费项</th><th scope="col">本站售价（USD）</th><th scope="col">主渠道参考成本（USD）</th></tr></thead>
+                <tbody id="rates"></tbody>
+              </table>
+            </div>
+            <div class="card-foot">本站售价为最终单价 · 主渠道成本按示例汇率换算</div>
+          </section>
+
+          <section class="card" aria-labelledby="channels-title">
+            <div class="card-head">
+              <div><h2 id="channels-title">渠道绑定</h2><p class="sub">请求失败后，在本售价版本的绑定内重试。</p></div>
+              <button class="text-button" id="bindings" type="button">编辑绑定 ↗</button>
+            </div>
+            <div class="scroll">
+              <table aria-label="渠道绑定">
+                <thead><tr><th scope="col">顺序</th><th scope="col">实际 API 渠道</th><th scope="col">报价版本</th><th scope="col">缓存用量</th></tr></thead>
+                <tbody>
+                  <tr><td><b>主渠道</b></td><td>String · Kimi 主线 <small id="main-channel">渠道 #214 · kimi-k3</small></td><td class="num" id="main-quote">v12</td><td><span class="badge good">已核验</span></td></tr>
+                  <tr id="backup"><td><b>备用</b></td><td>String · Kimi 备用 <small>渠道 #229 · kimi-k3</small></td><td class="num">v8</td><td><span class="badge draft">1 小时写入待核验</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <aside class="stack" aria-label="试算与发布">
+          <section class="card" aria-labelledby="estimate-title">
+            <div class="card-head">
+              <div><h2 id="estimate-title">成本与毛利试算</h2><p class="sub">按主渠道的报价版本估算</p></div>
+            </div>
+            <div class="scenario" aria-label="试算场景">
+              <button class="chip" data-case="plain" aria-pressed="false" type="button">无缓存</button>
+              <button class="chip" data-case="read" aria-pressed="true" type="button">缓存命中</button>
+              <button class="chip" data-case="write" aria-pressed="false" type="button">分时缓存写入</button>
+            </div>
+            <p class="scenario-desc" id="scenario-desc"></p>
+            <dl aria-live="polite">
+              <div><dt>预计对客收费</dt><dd class="num" id="revenue"></dd></div>
+              <div><dt>预计上游成本</dt><dd class="num" id="cost"></dd></div>
+              <div class="margin"><dt>预计毛利</dt><dd class="num" id="profit"></dd></div>
+            </dl>
+          </section>
+
+          <section class="card" aria-labelledby="publish-title">
+            <div class="card-head">
+              <div><h2 id="publish-title">发布检查</h2><p class="sub" id="publish-target"></p></div>
+              <span class="badge draft" id="publish-status">待核验</span>
+            </div>
+            <ul class="checks">
+              <li><span class="check-mark" aria-hidden="true">✓</span> 主渠道已启用，模型映射匹配</li>
+              <li><span class="check-mark" aria-hidden="true">✓</span> 主渠道已提供 5 分钟和 1 小时写入用量</li>
+            </ul>
+            <div class="warning" id="publish-warning">
+              <strong>备用渠道缺少 1 小时缓存写入样本</strong>
+              <p>核验回包，或移除该绑定后继续发布。</p>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+    <section class="card" id="catalog" role="tabpanel" aria-labelledby="catalog-tab" hidden>
+      <div class="card-head">
+        <div><h2>已导入报价</h2><p class="sub">保留来源、原始计费单位与历史版本。</p></div>
+        <button class="button" id="import-quote" type="button">导入快照</button>
+      </div>
+      <div class="scroll">
+        <table aria-label="已导入报价">
+          <thead><tr><th scope="col">来源 / 上游分组</th><th scope="col">上游模型 ID</th><th scope="col">输入 / 输出（积分 / 百万 Token）</th><th scope="col">报价版本</th><th scope="col">本站分组</th></tr></thead>
+          <tbody>
+            <tr><td>String · Kimi</td><td><code>kimi-k3</code></td><td class="num">5.00 / 25.00</td><td class="num">v12</td><td><button class="text-button" data-group="0" type="button">1004-Kimi ↗</button></td></tr>
+            <tr><td>String · Kimi（演示分组）</td><td><code>kimi-k3</code></td><td class="num">5.00 / 25.00</td><td class="num">v5</td><td><button class="text-button" data-group="1" type="button">1005-Kimi ↗</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer id="sale-footer">
+    <div class="footer-inner">
+      <p class="sub" id="footer-status" aria-live="polite">草稿修改在发布后生效。</p>
+      <div class="actions">
+        <button class="button" id="save" type="button">保存草稿</button>
+        <button class="button primary" id="preview" type="button">预览发布</button>
+      </div>
+    </div>
+  </footer>
+
+  <dialog id="dialog">
+    <h2 id="dialog-title"></h2>
+    <p id="dialog-body"></p>
+    <form method="dialog" class="actions"><button class="button" type="submit">关闭</button><button class="button primary" id="dialog-action" type="button" hidden></button></form>
+  </dialog>
+  <script>
+    const byId = (id) => document.getElementById(id)
+    const fields = [
+      ['普通输入', 'p', 5], ['输出', 'c', 25], ['缓存读取', 'cr', 0.5],
+      ['缓存写入 · 5 分钟', 'cc', 5], ['缓存写入 · 1 小时', 'cc1h', 10],
+    ]
+    const groups = [
+      { name: '1004-Kimi', prices: [0.8, 4, 0.08, 0.8, 1.6], version: 2, quote: 12, channel: 214, backup: true },
+      { name: '1005-Kimi', prices: [1, 5, 0.1, 1, 2], version: 1, quote: 5, channel: 231, backup: false },
+    ]
+    const scenarios = {
+      plain: { tokens: [100000, 10000, 0, 0, 0], label: '10 万普通输入 · 1 万输出' },
+      read: { tokens: [20000, 10000, 80000, 0, 0], label: '2 万普通输入 · 8 万缓存读取 · 1 万输出' },
+      write: { tokens: [20000, 10000, 0, 40000, 40000], label: '2 万普通输入 · 两档缓存各写入 4 万 · 1 万输出' },
+    }
+    const exchange = 0.1
+    const activeGroup = () => groups[byId('group').selectedIndex]
+    const dollar = (amount, precision = 4) => '$' + amount.toFixed(precision)
+    let scenario = 'read'
+
+    function renderEstimate() {
+      const { tokens, label } = scenarios[scenario]
+      const total = (prices) => tokens.reduce((sum, count, i) => sum + count * prices[i], 0) / 1000000
+      const revenue = total(activeGroup().prices)
+      const cost = total(fields.map(([, , credits]) => credits * exchange))
+      byId('scenario-desc').textContent = label
+      byId('revenue').textContent = dollar(revenue)
+      byId('cost').textContent = dollar(cost)
+      byId('profit').textContent = dollar(revenue - cost) + (revenue > 0 ? ' · ' + ((revenue - cost) / revenue * 100).toFixed(1) + '%' : '')
+    }
+
+    function renderDraft() {
+      const group = activeGroup()
+      byId('live-version').textContent = 'v' + group.version
+      byId('draft-version').textContent = 'v' + (group.version + 1) + ' 草稿'
+      byId('main-channel').textContent = '渠道 #' + group.channel + ' · kimi-k3'
+      byId('main-quote').textContent = 'v' + group.quote
+      byId('publish-target').textContent = 'kimi-k3 · ' + group.name
+      byId('backup').hidden = !group.backup
+      byId('publish-warning').hidden = !group.backup
+      byId('publish-status').className = 'badge ' + (group.backup ? 'draft' : 'good')
+      byId('publish-status').textContent = group.backup ? '待核验' : '可发布'
+      byId('rates').innerHTML = fields.map(([label, variable, credits], i) =>
+        '<tr><td><b>' + label + '</b> <code class="sub">' + variable + '</code></td>' +
+        '<td><label class="input-wrap">$ <input class="num" aria-label="' + label +
+        '售价" data-rate="' + i + '" type="number" min="0" step="0.01" value="' +
+        group.prices[i].toFixed(2) + '"></label></td>' +
+        '<td class="source"><span class="num">' + dollar(credits * exchange, 2) +
+        '</span><small>' + credits.toFixed(2) + ' 积分</small></td></tr>'
+      ).join('')
+      renderEstimate()
+    }
+
+    function showTab(isSale) {
+      byId('sale').hidden = !isSale
+      byId('sale-footer').hidden = !isSale
+      byId('catalog').hidden = isSale
+      byId('sale-tab').setAttribute('aria-selected', isSale)
+      byId('catalog-tab').setAttribute('aria-selected', !isSale)
+      byId('history').hidden = !isSale
+      byId('page-title').textContent = isSale ? '本站售价' : '报价目录'
+      byId('page-subtitle').textContent = isSale ? '按本地模型与销售分组配置对客价格。' : '查看上游报价与本站销售分组的关联。'
+    }
+
+    function showDialog(title, message, actionLabel, action) {
+      byId('dialog-title').textContent = title
+      byId('dialog-body').textContent = message
+      byId('dialog-action').hidden = !actionLabel
+      byId('dialog-action').textContent = actionLabel || ''
+      byId('dialog-action').onclick = action || null
+      byId('dialog').showModal()
+    }
+
+    byId('rates').addEventListener('input', (event) => {
+      const { valueAsNumber, dataset } = event.target
+      if (Number.isFinite(valueAsNumber) && valueAsNumber >= 0) {
+        activeGroup().prices[Number(dataset.rate)] = valueAsNumber
+        renderEstimate()
+      }
+    })
+    byId('group').addEventListener('change', () => {
+      byId('footer-status').textContent = '草稿修改在发布后生效。'
+      renderDraft()
+    })
+    document.querySelectorAll('[data-case]').forEach((button) => button.addEventListener('click', () => {
+      scenario = button.dataset.case
+      document.querySelectorAll('[data-case]').forEach((item) => item.setAttribute('aria-pressed', item === button))
+      renderEstimate()
+    }))
+    document.querySelectorAll('[data-group]').forEach((button) => button.addEventListener('click', () => {
+      byId('group').selectedIndex = Number(button.dataset.group)
+      renderDraft()
+      showTab(true)
+    }))
+    byId('catalog-tab').onclick = () => showTab(false)
+    byId('sale-tab').onclick = () => showTab(true)
+    byId('save').onclick = () => { byId('footer-status').textContent = '草稿已保存到本次演示。' }
+    byId('expression').onclick = () => {
+      const terms = fields.map(([, variable], i) => variable + ' * ' + activeGroup().prices[i])
+      showDialog('计费表达式', '基础档 · USD / 百万 Token')
+      const expression = document.createElement('code')
+      expression.textContent = 'tier("base", ' + terms.join(' + ') + ')'
+      byId('dialog-body').append(expression)
+    }
+    byId('history').onclick = () => {
+      const group = activeGroup()
+      showDialog('版本记录', group.name + ' 当前线上 v' + group.version + '，编辑中的草稿为 v' + (group.version + 1) + '。')
+    }
+    byId('bindings').onclick = () => {
+      const group = activeGroup()
+      showDialog('编辑绑定',
+        group.backup ? '备用渠道 #229 正在等待 1 小时写入用量核验。' : '当前售价版本只包含主渠道。',
+        group.backup ? '移除备用绑定' : '加入备用渠道 #229',
+        () => {
+          group.backup = !group.backup
+          byId('dialog').close()
+          renderDraft()
+        })
+    }
+    byId('preview').onclick = () => {
+      const group = activeGroup()
+      const target = 'kimi-k3 · ' + group.name + ' · v' + (group.version + 1)
+      if (group.backup) {
+        showDialog('发布预览 · 待核验', target + '。备用渠道 #229 缺少 1 小时缓存写入样本。')
+      } else {
+        showDialog('发布预览 · 可发布', target + '。发布后将启用这套售价和主渠道 #' + group.channel + '。')
+      }
+    }
+    byId('import-quote').onclick = () => showDialog('导入报价快照', '选择来源与快照文件后，后台将预览分组、模型和费率变动。')
+    renderDraft()
+  </script>
+</body>
+</html>

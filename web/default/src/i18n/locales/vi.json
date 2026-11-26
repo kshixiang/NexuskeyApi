@@ -117,6 +117,7 @@
     "Accept Unpriced Models": "Chấp nhận các Mô hình chưa định giá",
     "Accepts a JSON array of model identifiers that support the Imagine API.": "Chấp nhận một mảng JSON gồm các mã định danh mô hình hỗ trợ API Imagine.",
     "Accepts comma-separated status codes and inclusive ranges.": "Chấp nhận mã trạng thái phân cách bằng dấu phẩy và phạm vi bao gồm.",
+    "Access Claude, GPT, Gemini and more through one API.": "Truy cập Claude, GPT, Gemini và các mô hình khác qua một API duy nhất.",
     "Access Denied Message": "Thông báo từ chối truy cập",
     "Access Forbidden": "Truy cập bị cấm",
     "Access Policy (JSON)": "Chính sách truy cập (JSON)",
@@ -252,6 +253,7 @@
     "All Types": "All types",
     "All Vendors": "Tất cả Nhà cung cấp",
     "1 CNY = 1 USD credit · Multi-channel": "1 CNY = 1 USD · Kênh ổn định",
+    "AI API Gateway": "Cổng API AI",
     "All Your AI Models": "Tất cả mô hình AI của bạn",
     "All categories": "Tất cả danh mục",
     "All conditions must match before this tier is used.": "All conditions must match before this tier is used.",
@@ -2580,6 +2582,7 @@
     "OhMyGPT": "OhMyGPT",
     "Old Format Template": "Mẫu Định dạng Cũ",
     "Old format: Direct override. New format: Supports conditional judgment and custom JSON operations.": "Định dạng cũ: Ghi đè trực tiếp. Định dạng mới: Hỗ trợ phán đoán có điều kiện và các thao tác JSON tùy chỉnh.",
+    "One API key, multiple AI models": "Một khóa API, nhiều mô hình AI",
     "Ollama": "Ollama",
     "Ollama Models": "Mô hình Ollama",
     "One API": "Một API",
@@ -3830,6 +3833,7 @@
     "To Lowercase": "Chuyển chữ thường",
     "To Upper": "Chữ hoa",
     "To Uppercase": "Chuyển chữ hoa",
+    "Toggle password visibility": "Bật hoặc tắt hiển thị mật khẩu",
     "Today": "Hôm nay",
     "Toggle columns": "Chuyển đổi cột",
     "Toggle navigation menu": "Chuyển đổi menu điều hướng",
@@ -4609,6 +4613,10 @@
     "Now": "现在",
     "{{count}} tests": "{{count}} 次测试",
     "Edit group": "Chỉnh sửa nhóm",
-    "Edit group settings": "Chỉnh sửa cài đặt nhóm"
+    "Edit group settings": "Chỉnh sửa cài đặt nhóm",
+    "Domestic Models": "Mô hình Trung Quốc",
+    "General-purpose": "Đa dụng",
+    "Set a name and choose a category and group for your API key.": "Đặt tên rồi chọn danh mục và nhóm cho khóa API của bạn.",
+    "Expiration, quantity, quota, and access restrictions": "Thời hạn, số lượng, hạn mức và giới hạn truy cập"
   }
 }

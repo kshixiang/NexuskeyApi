@@ -57,6 +57,7 @@ import {
   API_KEY_STATUSES,
   ERROR_MESSAGES,
 } from '../constants'
+import { getApiKeyCategoryLabel } from '../lib/api-key-category'
 import { type ApiKey } from '../types'
 import { ApiKeyCell } from './api-keys-cells'
 import { useApiKeysColumns } from './api-keys-columns'
@@ -146,7 +147,7 @@ function ApiKeysMobileList({
                   {apiKey.name}
                 </div>
                 <div className='text-muted-foreground text-[11px]'>
-                  {t('API Key')}
+                  {getApiKeyCategoryLabel(apiKey.category, t)}
                 </div>
               </div>
               {statusConfig && (

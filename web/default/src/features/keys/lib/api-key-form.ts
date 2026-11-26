@@ -20,6 +20,7 @@ import { z } from 'zod'
 import { parseQuotaFromDollars, quotaUnitsToDollars } from '@/lib/format'
 import { DEFAULT_GROUP } from '../constants'
 import { type ApiKeyFormData, type ApiKey } from '../types'
+import { API_KEY_CATEGORIES } from './api-key-category'
 
 // ============================================================================
 // Form Schema
@@ -27,6 +28,7 @@ import { type ApiKeyFormData, type ApiKey } from '../types'
 
 export const apiKeyFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  category: z.enum(API_KEY_CATEGORIES),
   remain_quota_dollars: z.number().min(0).optional(),
   expired_time: z.date().optional(),
   unlimited_quota: z.boolean(),
@@ -45,6 +47,7 @@ export type ApiKeyFormValues = z.infer<typeof apiKeyFormSchema>
 
 export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   name: '',
+  category: 'general',
   remain_quota_dollars: 10,
   expired_time: undefined,
   unlimited_quota: true,
@@ -77,6 +80,7 @@ export function transformFormDataToPayload(
 ): ApiKeyFormData {
   return {
     name: data.name,
+    category: data.category,
     remain_quota: data.unlimited_quota
       ? 0
       : parseQuotaFromDollars(data.remain_quota_dollars || 0),
@@ -100,6 +104,9 @@ export function transformApiKeyToFormDefaults(
 ): ApiKeyFormValues {
   return {
     name: apiKey.name,
+    category: apiKeyFormSchema.shape.category
+      .catch('general')
+      .parse(apiKey.category),
     remain_quota_dollars: quotaUnitsToDollars(apiKey.remain_quota),
     expired_time:
       apiKey.expired_time > 0

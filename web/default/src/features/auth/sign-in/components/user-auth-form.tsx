@@ -21,7 +21,7 @@ import type { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from '@tanstack/react-router'
-import { Loader2, LogIn, KeyRound } from 'lucide-react'
+import { Loader2, LogIn, KeyRound, Lock, Mail } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -49,6 +49,11 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
@@ -279,9 +284,16 @@ export function UserAuthForm({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className={cn('grid gap-4', className)}
+        className={cn('auth-form', className)}
         {...props}
       >
+        <OAuthProviders
+          status={status}
+          layout='grid'
+          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+          onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
+          isWeChatLoading={isWeChatSubmitting}
+        />
         {/* Username Field */}
         <FormField
           control={form.control}
@@ -289,12 +301,18 @@ export function UserAuthForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t('Username or Email')}</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder={t('Enter your username or email')}
-                  {...field}
-                />
-              </FormControl>
+              <InputGroup className='auth-input'>
+                <InputGroupAddon aria-hidden='true'>
+                  <Mail />
+                </InputGroupAddon>
+                <FormControl data-slot='input-group-control'>
+                  <InputGroupInput
+                    autoComplete='username'
+                    placeholder={t('Enter your username or email')}
+                    {...field}
+                  />
+                </FormControl>
+              </InputGroup>
               <FormMessage />
             </FormItem>
           )}
@@ -305,18 +323,26 @@ export function UserAuthForm({
           control={form.control}
           name='password'
           render={({ field }) => (
-            <FormItem className='relative'>
-              <FormLabel>{t('Password')}</FormLabel>
+            <FormItem>
+              <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-1'>
+                <FormLabel>{t('Password')}</FormLabel>
+                <Link
+                  to='/forgot-password'
+                  className='text-muted-foreground hover:text-primary text-xs font-medium underline-offset-4 hover:underline'
+                >
+                  {t('Forgot password?')}
+                </Link>
+              </div>
               <FormControl>
-                <PasswordInput placeholder={t('Enter password')} {...field} />
+                <PasswordInput
+                  className='auth-input'
+                  autoComplete='current-password'
+                  startIcon={<Lock />}
+                  placeholder={t('Enter password')}
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
-              <Link
-                to='/forgot-password'
-                className='text-muted-foreground absolute end-0 -top-0.5 text-sm font-medium hover:opacity-75'
-              >
-                {t('Forgot password?')}
-              </Link>
             </FormItem>
           )}
         />
@@ -324,10 +350,14 @@ export function UserAuthForm({
         {/* Submit Button */}
         <Button
           type='submit'
-          className='mt-2 w-full justify-center gap-2'
+          className='auth-submit w-full justify-center gap-2'
           disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
         >
-          {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
+          {isLoading ? (
+            <Loader2 data-icon='inline-start' className='animate-spin' />
+          ) : (
+            <LogIn data-icon='inline-start' />
+          )}
           {t('Sign in')}
         </Button>
 
@@ -371,14 +401,6 @@ export function UserAuthForm({
             )}
           </div>
         )}
-
-        {/* OAuth Providers */}
-        <OAuthProviders
-          status={status}
-          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-          onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
-          isWeChatLoading={isWeChatSubmitting}
-        />
       </form>
 
       {hasWeChatLogin && (

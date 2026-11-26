@@ -70,6 +70,18 @@ func adaptiveThinkingEffort(model, effort string) string {
 	return ""
 }
 
+func adaptiveEffortForBudget(budgetTokens int) string {
+	// Match the token budgets used for the legacy low and medium effort levels.
+	switch {
+	case budgetTokens <= 1280:
+		return "low"
+	case budgetTokens <= 2048:
+		return "medium"
+	default:
+		return "high"
+	}
+}
+
 func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRequest) (*dto.ClaudeRequest, error) {
 	claudeTools := make([]any, 0, len(textRequest.Tools))
 
@@ -179,7 +191,18 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 		claudeRequest.MaxTokens = &defaultMaxTokens
 	}
 
-	adaptiveEffort := adaptiveThinkingEffort(textRequest.Model, textRequest.ReasoningEffort)
+	var legacyReasoning openrouter.RequestReasoning
+	if textRequest.Reasoning != nil {
+		if err := common.Unmarshal(textRequest.Reasoning, &legacyReasoning); err != nil {
+			return nil, err
+		}
+	}
+	budgetTokens := legacyReasoning.MaxTokens
+	requestedEffort := textRequest.ReasoningEffort
+	if requestedEffort == "" {
+		requestedEffort = legacyReasoning.Effort
+	}
+	adaptiveEffort := adaptiveThinkingEffort(textRequest.Model, requestedEffort)
 	if baseModel, effortLevel, ok := reasoning.TrimEffortSuffix(textRequest.Model); ok && effortLevel != "" &&
 		(strings.HasPrefix(textRequest.Model, "claude-opus-4-6") || strings.HasPrefix(textRequest.Model, "claude-opus-4-7")) {
 		claudeRequest.Model = baseModel
@@ -202,7 +225,15 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 		strings.HasSuffix(textRequest.Model, "-thinking") {
 
 		trimmedModel := strings.TrimSuffix(textRequest.Model, "-thinking")
-		if strings.HasPrefix(trimmedModel, "claude-opus-4-7") {
+		isOpus47 := strings.HasPrefix(trimmedModel, "claude-opus-4-7")
+		if adaptiveEffort == "" && !isOpus47 {
+			suffixEffort := "high"
+			if budgetTokens > 0 {
+				suffixEffort = adaptiveEffortForBudget(budgetTokens)
+			}
+			adaptiveEffort = adaptiveThinkingEffort(trimmedModel, suffixEffort)
+		}
+		if isOpus47 {
 			// Opus 4.7 rejects thinking.type="enabled"; use adaptive at high effort.
 			claudeRequest.Thinking = &dto.Thinking{Type: "adaptive", Display: "summarized"}
 			claudeRequest.OutputConfig = json.RawMessage(`{"effort":"high"}`)
@@ -230,6 +261,10 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 		}
 	}
 
+	if adaptiveEffort == "" && budgetTokens > 0 &&
+		(claudeRequest.Thinking == nil || claudeRequest.Thinking.Type != "adaptive") {
+		adaptiveEffort = adaptiveThinkingEffort(textRequest.Model, adaptiveEffortForBudget(budgetTokens))
+	}
 	if adaptiveEffort != "" {
 		if claudeRequest.Thinking == nil || claudeRequest.Thinking.Type != "adaptive" {
 			claudeRequest.Thinking = &dto.Thinking{Type: "adaptive"}
@@ -259,19 +294,10 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 		}
 	}
 
-	// 指定了 reasoning 参数,覆盖 budgetTokens
-	if textRequest.Reasoning != nil {
-		var reasoning openrouter.RequestReasoning
-		if err := common.Unmarshal(textRequest.Reasoning, &reasoning); err != nil {
-			return nil, err
-		}
-
-		budgetTokens := reasoning.MaxTokens
-		if budgetTokens > 0 && (claudeRequest.Thinking == nil || claudeRequest.Thinking.Type != "adaptive") {
-			claudeRequest.Thinking = &dto.Thinking{
-				Type:         "enabled",
-				BudgetTokens: &budgetTokens,
-			}
+	if budgetTokens > 0 && (claudeRequest.Thinking == nil || claudeRequest.Thinking.Type != "adaptive") {
+		claudeRequest.Thinking = &dto.Thinking{
+			Type:         "enabled",
+			BudgetTokens: &budgetTokens,
 		}
 	}
 

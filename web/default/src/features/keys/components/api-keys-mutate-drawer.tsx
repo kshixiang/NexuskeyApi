@@ -16,17 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import {
-  ChevronDown,
-  KeyRound,
-  Settings2,
-  WalletCards,
-  type LucideIcon,
-} from 'lucide-react'
+import { ChevronDown, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getUserModels, getUserGroups } from '@/lib/api'
@@ -39,6 +33,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import { FieldGroup, FieldLegend, FieldSet } from '@/components/ui/field'
 import {
   Form,
   FormControl,
@@ -72,6 +67,7 @@ import {
   transformApiKeyToFormDefaults,
 } from '../lib'
 import { type ApiKey } from '../types'
+import { ApiKeyCategorySelect } from './api-key-category-select'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
@@ -84,34 +80,6 @@ type ApiKeyMutateDrawerProps = {
   onOpenChange: (open: boolean) => void
   currentRow?: ApiKey
   side?: 'left' | 'right'
-}
-
-type ApiKeyFormSectionProps = {
-  title: string
-  description: string
-  icon: LucideIcon
-  children: ReactNode
-}
-
-function ApiKeyFormSection(props: ApiKeyFormSectionProps) {
-  const Icon = props.icon
-
-  return (
-    <section className='bg-card rounded-lg border'>
-      <div className='flex items-center gap-2.5 border-b px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3'>
-        <div className='bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-lg border sm:size-10'>
-          <Icon className='size-4 sm:size-5' />
-        </div>
-        <div className='min-w-0'>
-          <h3 className='text-sm leading-none font-medium'>{props.title}</h3>
-          <p className='text-muted-foreground mt-0.5 text-xs sm:mt-1'>
-            {props.description}
-          </p>
-        </div>
-      </div>
-      <div className='space-y-3 p-3 sm:space-y-4 sm:p-4'>{props.children}</div>
-    </section>
-  )
 }
 
 export function ApiKeysMutateDrawer({
@@ -169,6 +137,7 @@ export function ApiKeysMutateDrawer({
 
   // Load existing data when updating
   useEffect(() => {
+    if (open) setAdvancedOpen(false)
     if (open && isUpdate && currentRow) {
       // For update, fetch fresh data
       getApiKey(currentRow.id).then((result) => {
@@ -273,7 +242,7 @@ export function ApiKeysMutateDrawer({
     >
       <SheetContent
         side={side}
-        className='bg-background flex !h-dvh !w-screen max-w-none gap-0 overflow-hidden p-0 sm:!w-full sm:!max-w-[620px]'
+        className='bg-background flex !h-dvh !w-screen max-w-none gap-0 overflow-hidden p-0 sm:!w-full sm:!max-w-[680px]'
       >
         <SheetHeader className='bg-background border-b px-4 py-3 text-start sm:px-5 sm:py-4'>
           <SheetTitle className='text-base sm:text-lg'>
@@ -282,32 +251,53 @@ export function ApiKeysMutateDrawer({
           <SheetDescription className='pr-6 text-xs sm:text-sm'>
             {isUpdate
               ? t('Update the API key by providing necessary info.')
-              : t('Add a new API key by providing necessary info.')}{' '}
-            {t("Click save when you're done.")}
+              : t(
+                  'Set a name and choose a category and group for your API key.'
+                )}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
           <form
             id='api-key-form'
             onSubmit={form.handleSubmit(onSubmit)}
-            className='min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:space-y-4 sm:px-4 sm:py-4'
+            className='flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6'
           >
-            <ApiKeyFormSection
-              title={t('Basic Information')}
-              description={t('Set API key basic information')}
-              icon={KeyRound}
-            >
+            <FieldGroup>
               <FormField
                 control={form.control}
                 name='name'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Name')}</FormLabel>
+                    <FormLabel>
+                      {t('Name')}{' '}
+                      <span aria-hidden className='text-destructive'>
+                        *
+                      </span>
+                    </FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder={t('Enter a name')} />
+                      <Input
+                        {...field}
+                        maxLength={50}
+                        required
+                        placeholder={t('Enter a name')}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='category'
+                render={({ field }) => (
+                  <FieldSet>
+                    <FieldLegend variant='label'>{t('Category')}</FieldLegend>
+                    <ApiKeyCategorySelect
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    />
+                  </FieldSet>
                 )}
               />
 
@@ -329,8 +319,6 @@ export function ApiKeysMutateDrawer({
                   </FormItem>
                 )}
               />
-
-              <ApiKeyGroupModelsPanel group={selectedGroup} />
 
               {selectedGroup === 'auto' && (
                 <FormField
@@ -358,155 +346,7 @@ export function ApiKeysMutateDrawer({
                   )}
                 />
               )}
-
-              <FormField
-                control={form.control}
-                name='expired_time'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Expiration Time')}</FormLabel>
-                    <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
-                      <FormControl>
-                        <DateTimePicker
-                          value={field.value}
-                          onChange={field.onChange}
-                          placeholder={t('Never expires')}
-                          className='min-w-0 [&_input[type=time]]:w-24 sm:[&_input[type=time]]:w-32'
-                        />
-                      </FormControl>
-                      <div className='grid grid-cols-4 gap-2 sm:flex'>
-                        <Button
-                          type='button'
-                          variant='outline'
-                          size='sm'
-                          className='px-2 text-xs sm:px-3 sm:text-sm'
-                          onClick={() => handleSetExpiry(0, 0, 0)}
-                        >
-                          {t('Never')}
-                        </Button>
-                        <Button
-                          type='button'
-                          variant='outline'
-                          size='sm'
-                          className='px-2 text-xs sm:px-3 sm:text-sm'
-                          onClick={() => handleSetExpiry(1, 0, 0)}
-                        >
-                          {t('1 Month')}
-                        </Button>
-                        <Button
-                          type='button'
-                          variant='outline'
-                          size='sm'
-                          className='px-2 text-xs sm:px-3 sm:text-sm'
-                          onClick={() => handleSetExpiry(0, 1, 0)}
-                        >
-                          {t('1 Day')}
-                        </Button>
-                        <Button
-                          type='button'
-                          variant='outline'
-                          size='sm'
-                          className='px-2 text-xs sm:px-3 sm:text-sm'
-                          onClick={() => handleSetExpiry(0, 0, 1)}
-                        >
-                          {t('1 Hour')}
-                        </Button>
-                      </div>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {!isUpdate && (
-                <FormField
-                  control={form.control}
-                  name='tokenCount'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('Quantity')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          min='1'
-                          placeholder={t('Number of keys to create')}
-                          onChange={(e) =>
-                            field.onChange(parseInt(e.target.value, 10) || 1)
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Create multiple API keys at once (random suffix will be added to names)'
-                        )}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-            </ApiKeyFormSection>
-
-            <ApiKeyFormSection
-              title={t('Quota Settings')}
-              description={t('Set quota amount and limits')}
-              icon={WalletCards}
-            >
-              {!unlimitedQuota && (
-                <FormField
-                  control={form.control}
-                  name='remain_quota_dollars'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{quotaLabel}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          step={tokensOnly ? 1 : 0.01}
-                          placeholder={quotaPlaceholder}
-                          onChange={(e) =>
-                            field.onChange(parseFloat(e.target.value) || 0)
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {tokensOnly
-                          ? t('Enter the quota amount in tokens')
-                          : t('Enter the quota amount in {{currency}}', {
-                              currency: currencyLabel,
-                            })}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              <FormField
-                control={form.control}
-                name='unlimited_quota'
-                render={({ field }) => (
-                  <FormItem className='flex min-h-16 flex-row items-center justify-between gap-3 rounded-lg border px-3 py-2.5 sm:min-h-20 sm:gap-4 sm:px-4 sm:py-3'>
-                    <div className='space-y-0.5'>
-                      <FormLabel className='text-sm'>
-                        {t('Unlimited Quota')}
-                      </FormLabel>
-                      <FormDescription className='text-xs'>
-                        {t('Enable unlimited quota for this API key')}
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </ApiKeyFormSection>
+            </FieldGroup>
 
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
               <section className='bg-card rounded-lg border'>
@@ -526,7 +366,9 @@ export function ApiKeysMutateDrawer({
                       {t('Advanced Settings')}
                     </h3>
                     <p className='text-muted-foreground mt-1 text-xs'>
-                      {t('Set API key access restrictions')}
+                      {t(
+                        'Expiration, quantity, quota, and access restrictions'
+                      )}
                     </p>
                   </div>
                   <ChevronDown
@@ -537,7 +379,152 @@ export function ApiKeysMutateDrawer({
                   />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <div className='space-y-3 border-t p-3 sm:space-y-4 sm:p-4'>
+                  <FieldGroup className='border-t p-3 sm:p-4'>
+                    <FormField
+                      control={form.control}
+                      name='expired_time'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('Expiration Time')}</FormLabel>
+                          <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
+                            <FormControl>
+                              <DateTimePicker
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder={t('Never expires')}
+                                className='min-w-0 [&_input[type=time]]:w-24 sm:[&_input[type=time]]:w-32'
+                              />
+                            </FormControl>
+                            <div className='grid grid-cols-4 gap-2 sm:flex'>
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='sm'
+                                className='px-2 text-xs sm:px-3 sm:text-sm'
+                                onClick={() => handleSetExpiry(0, 0, 0)}
+                              >
+                                {t('Never')}
+                              </Button>
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='sm'
+                                className='px-2 text-xs sm:px-3 sm:text-sm'
+                                onClick={() => handleSetExpiry(1, 0, 0)}
+                              >
+                                {t('1 Month')}
+                              </Button>
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='sm'
+                                className='px-2 text-xs sm:px-3 sm:text-sm'
+                                onClick={() => handleSetExpiry(0, 1, 0)}
+                              >
+                                {t('1 Day')}
+                              </Button>
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='sm'
+                                className='px-2 text-xs sm:px-3 sm:text-sm'
+                                onClick={() => handleSetExpiry(0, 0, 1)}
+                              >
+                                {t('1 Hour')}
+                              </Button>
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {!isUpdate && (
+                      <FormField
+                        control={form.control}
+                        name='tokenCount'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Quantity')}</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type='number'
+                                min='1'
+                                placeholder={t('Number of keys to create')}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    parseInt(e.target.value, 10) || 1
+                                  )
+                                }
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              {t(
+                                'Create multiple API keys at once (random suffix will be added to names)'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    {!unlimitedQuota && (
+                      <FormField
+                        control={form.control}
+                        name='remain_quota_dollars'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{quotaLabel}</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                type='number'
+                                step={tokensOnly ? 1 : 0.01}
+                                placeholder={quotaPlaceholder}
+                                onChange={(e) =>
+                                  field.onChange(
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              {tokensOnly
+                                ? t('Enter the quota amount in tokens')
+                                : t('Enter the quota amount in {{currency}}', {
+                                    currency: currencyLabel,
+                                  })}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    <FormField
+                      control={form.control}
+                      name='unlimited_quota'
+                      render={({ field }) => (
+                        <FormItem className='flex min-h-16 flex-row items-center justify-between gap-3 rounded-lg border px-3 py-2.5 sm:min-h-20 sm:gap-4 sm:px-4 sm:py-3'>
+                          <div className='space-y-0.5'>
+                            <FormLabel className='text-sm'>
+                              {t('Unlimited Quota')}
+                            </FormLabel>
+                            <FormDescription className='text-xs'>
+                              {t('Enable unlimited quota for this API key')}
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <ApiKeyGroupModelsPanel group={selectedGroup} />
                     <FormField
                       control={form.control}
                       name='model_limits'
@@ -592,7 +579,7 @@ export function ApiKeysMutateDrawer({
                         </FormItem>
                       )}
                     />
-                  </div>
+                  </FieldGroup>
                 </CollapsibleContent>
               </section>
             </Collapsible>
@@ -602,7 +589,7 @@ export function ApiKeysMutateDrawer({
           <SheetClose
             render={<Button variant='outline' className='w-full sm:w-auto' />}
           >
-            {t('Close')}
+            {t('Cancel')}
           </SheetClose>
           <Button
             form='api-key-form'
@@ -610,7 +597,8 @@ export function ApiKeysMutateDrawer({
             disabled={isSubmitting}
             className='w-full sm:w-auto'
           >
-            {isSubmitting ? t('Saving...') : t('Save changes')}
+            {isSubmitting && t('Saving...')}
+            {!isSubmitting && (isUpdate ? t('Save changes') : t('Create'))}
           </Button>
         </SheetFooter>
       </SheetContent>

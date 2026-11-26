@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Lock, Mail, UserRound, UserRoundPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -43,6 +43,11 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
@@ -223,9 +228,19 @@ export function SignUpForm({
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className={cn('grid gap-4', className)}
+        className={cn('auth-form', className)}
         {...props}
       >
+        {oauthRegisterEnabled && (
+          <OAuthProviders
+            status={status}
+            layout='grid'
+            disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+            onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
+            isWeChatLoading={isWeChatSubmitting}
+          />
+        )}
+
         {/* Username Field */}
         <FormField
           control={form.control}
@@ -233,9 +248,18 @@ export function SignUpForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t('Username')}</FormLabel>
-              <FormControl>
-                <Input placeholder={t('Enter your username')} {...field} />
-              </FormControl>
+              <InputGroup className='auth-input'>
+                <InputGroupAddon aria-hidden='true'>
+                  <UserRound />
+                </InputGroupAddon>
+                <FormControl data-slot='input-group-control'>
+                  <InputGroupInput
+                    autoComplete='username'
+                    placeholder={t('Enter your username')}
+                    {...field}
+                  />
+                </FormControl>
+              </InputGroup>
               <FormMessage />
             </FormItem>
           )}
@@ -250,6 +274,9 @@ export function SignUpForm({
               <FormLabel>{t('Password')}</FormLabel>
               <FormControl>
                 <PasswordInput
+                  className='auth-input'
+                  autoComplete='new-password'
+                  startIcon={<Lock />}
                   placeholder={t('Enter password (8-20 characters)')}
                   {...field}
                 />
@@ -267,7 +294,13 @@ export function SignUpForm({
             <FormItem>
               <FormLabel>{t('Confirm password')}</FormLabel>
               <FormControl>
-                <PasswordInput placeholder={t('Confirm password')} {...field} />
+                <PasswordInput
+                  className='auth-input'
+                  autoComplete='new-password'
+                  startIcon={<Lock />}
+                  placeholder={t('Confirm password')}
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -286,41 +319,63 @@ export function SignUpForm({
                   <FormLabel>
                     {t('Email (required for verification)')}
                   </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder={t('name@example.com')}
-                      type='email'
-                      {...field}
-                    />
-                  </FormControl>
+                  <InputGroup className='auth-input'>
+                    <InputGroupAddon aria-hidden='true'>
+                      <Mail />
+                    </InputGroupAddon>
+                    <FormControl data-slot='input-group-control'>
+                      <InputGroupInput
+                        autoComplete='email'
+                        placeholder={t('name@example.com')}
+                        type='email'
+                        {...field}
+                      />
+                    </FormControl>
+                  </InputGroup>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
             {/* Verification Code Field */}
-            <div className='flex items-end gap-2'>
-              <div className='flex-1'>
-                <Input
-                  placeholder={t('Verification code')}
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value)}
-                />
+            <div className='grid gap-2'>
+              <Label htmlFor='sign-up-verification-code'>
+                {t('Verification code')}
+              </Label>
+              <div className='flex flex-wrap items-center gap-2'>
+                <InputGroup className='auth-input min-w-32 flex-1'>
+                  <InputGroupInput
+                    id='sign-up-verification-code'
+                    autoComplete='one-time-code'
+                    placeholder={t('Verification code')}
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                  />
+                </InputGroup>
+                <Button
+                  variant='outline'
+                  type='button'
+                  className='auth-code-button shrink-0'
+                  disabled={
+                    isLoading || isSendingCode || isActive || !emailValue
+                  }
+                  onClick={handleSendVerificationCode}
+                >
+                  {isActive ? (
+                    t('Resend ({{seconds}}s)', { seconds: secondsLeft })
+                  ) : isSendingCode ? (
+                    <>
+                      <Loader2
+                        data-icon='inline-start'
+                        className='animate-spin'
+                      />
+                      <span className='sr-only'>{t('Send code')}</span>
+                    </>
+                  ) : (
+                    t('Send code')
+                  )}
+                </Button>
               </div>
-              <Button
-                variant='outline'
-                type='button'
-                disabled={isLoading || isSendingCode || isActive || !emailValue}
-                onClick={handleSendVerificationCode}
-              >
-                {isActive ? (
-                  t('Resend ({{seconds}}s)', { seconds: secondsLeft })
-                ) : isSendingCode ? (
-                  <Loader2 className='h-4 w-4 animate-spin' />
-                ) : (
-                  t('Send code')
-                )}
-              </Button>
             </div>
           </>
         )}
@@ -345,22 +400,16 @@ export function SignUpForm({
         {/* Submit Button */}
         <Button
           type='submit'
-          className='mt-2 w-full justify-center gap-2'
+          className='auth-submit w-full justify-center gap-2'
           disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
         >
-          {isLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
+          {isLoading ? (
+            <Loader2 data-icon='inline-start' className='animate-spin' />
+          ) : (
+            <UserRoundPlus data-icon='inline-start' />
+          )}
           {t('Create account')}
         </Button>
-
-        {oauthRegisterEnabled && (
-          <OAuthProviders
-            status={status}
-            disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-            onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
-            isWeChatLoading={isWeChatSubmitting}
-            className='pt-2'
-          />
-        )}
       </form>
 
       {hasWeChatLogin && (
