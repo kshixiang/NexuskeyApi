@@ -76,9 +76,8 @@ type UpstreamQuotePreview struct {
 
 type UpstreamGroupPreview struct {
 	model.UpstreamQuoteGroup
-	UpstreamMultiplier *float64                    `json:"upstream_multiplier,omitempty"`
-	Quotes             []UpstreamQuotePreview      `json:"quotes"`
-	Versions           []model.UpstreamSaleVersion `json:"versions"`
+	Quotes   []UpstreamQuotePreview      `json:"quotes"`
+	Versions []model.UpstreamSaleVersion `json:"versions"`
 }
 
 var ErrUpstreamDraftChanged = errors.New("the draft changed; refresh and preview it again")
@@ -437,8 +436,33 @@ func ListUpstreamQuoteChannels() ([]UpstreamChannelView, error) {
 	if err := model.DB.Omit("api_key").Order("id").Find(&groups).Error; err != nil {
 		return nil, err
 	}
+	var rows []struct {
+		GroupID        int
+		LastSeenImport int64
+		Snapshot       string
+	}
+	if len(groups) > 0 {
+		if err := model.DB.Table("upstream_quote_models AS qm").
+			Select("qm.group_id, qm.last_seen_import, qv.snapshot").
+			Joins("JOIN upstream_quote_versions AS qv ON qv.id = qm.quote_version").
+			Scan(&rows).Error; err != nil {
+			return nil, err
+		}
+	}
+	multipliers := make(map[int]upstreamGroupMultipliers)
+	for _, row := range rows {
+		var quote UpstreamQuote
+		if err := common.UnmarshalJsonStr(row.Snapshot, &quote); err != nil {
+			return nil, err
+		}
+		rate, _ := upstreamQuoteMultipliers(quote)
+		groupRates := multipliers[row.GroupID]
+		groupRates.add(rate, row.LastSeenImport)
+		multipliers[row.GroupID] = groupRates
+	}
 	byChannel := make(map[int][]model.UpstreamQuoteGroup)
 	for _, group := range groups {
+		group.UpstreamMultiplier = multipliers[group.ID].common()
 		byChannel[group.ChannelID] = append(byChannel[group.ChannelID], group)
 	}
 	result := make([]UpstreamChannelView, 0, len(channels))

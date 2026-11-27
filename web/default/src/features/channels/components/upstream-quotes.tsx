@@ -9,6 +9,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -57,6 +62,7 @@ type Group = {
   base_url: string
   protocol: string
   multiplier: number
+  upstream_multiplier?: number
   final_multiplier?: number
   credit_cost: number
   revision: number
@@ -108,7 +114,6 @@ type Preview = {
   error?: string
 }
 type GroupDetail = Group & {
-  upstream_multiplier?: number
   quotes: Preview[] | null
   versions:
     | {
@@ -198,37 +203,64 @@ export function UpstreamQuotes() {
             </p>
           )}
           {channels.map((channel) => (
-            <div key={channel.id} className='space-y-1 border-t pt-2'>
-              <div className='flex items-center gap-2 px-2 py-1'>
-                <Layers className='size-4 shrink-0' />
+            <Collapsible
+              key={channel.id}
+              defaultOpen
+              className='space-y-1 border-t pt-2'
+            >
+              <CollapsibleTrigger
+                render={<Button type='button' variant='ghost' />}
+                className='group w-full justify-start gap-2 px-2 text-left'
+                title={channel.name}
+              >
+                <Layers data-icon='inline-start' aria-hidden='true' />
                 <span className='min-w-0 flex-1 truncate text-sm font-semibold'>
                   {channel.name}
                 </span>
                 <span className='text-muted-foreground font-mono text-xs'>
                   #{channel.id}
                 </span>
-              </div>
-              {channel.groups?.map((item) => (
-                <Button
-                  key={item.id}
-                  variant={
-                    selected === item.id && !importMode ? 'secondary' : 'ghost'
-                  }
-                  className='w-full justify-start'
-                  title={item.name}
-                  onClick={() => {
-                    setSelected(item.id)
-                    setImportMode(null)
-                  }}
-                >
-                  <ChevronRight className='size-3 shrink-0' />
-                  <span className='truncate'>{item.name}</span>
-                  {item.active_version > 0 && (
-                    <span className='ml-auto size-2 shrink-0 rounded-full bg-emerald-500' />
-                  )}
-                </Button>
-              ))}
-            </div>
+                <ChevronRight
+                  data-icon='inline-end'
+                  aria-hidden='true'
+                  className='transition-transform group-data-[panel-open]:rotate-90'
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent className='flex flex-col gap-1'>
+                {channel.groups?.map((item) => (
+                  <Button
+                    key={item.id}
+                    variant={
+                      selected === item.id && !importMode
+                        ? 'secondary'
+                        : 'ghost'
+                    }
+                    className='w-full justify-start'
+                    title={item.name}
+                    onClick={() => {
+                      setSelected(item.id)
+                      setImportMode(null)
+                    }}
+                  >
+                    <ChevronRight className='size-3 shrink-0' />
+                    <span className='min-w-0 flex-1 truncate text-left'>
+                      {item.name}
+                    </span>
+                    <span
+                      className='shrink-0 font-mono text-xs text-yellow-600 tabular-nums dark:text-yellow-400'
+                      title={t('Upstream multiplier')}
+                    >
+                      {item.upstream_multiplier == null
+                        ? '—'
+                        : formatQuoteMultiplier(item.upstream_multiplier)}
+                    </span>
+                    {item.active_version > 0 && (
+                      <span className='ml-auto size-2 shrink-0 rounded-full bg-emerald-500' />
+                    )}
+                  </Button>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
           ))}
         </aside>
         <section className='min-w-0 space-y-4'>

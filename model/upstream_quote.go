@@ -19,21 +19,22 @@ type UpstreamQuoteChannel struct {
 }
 
 type UpstreamQuoteGroup struct {
-	ID              int      `json:"id"`
-	ChannelID       int      `json:"channel_id" gorm:"uniqueIndex:idx_upstream_group_source;not null"`
-	SourceGroup     string   `json:"source_group" gorm:"size:64;uniqueIndex:idx_upstream_group_source;not null"`
-	OriginalName    string   `json:"original_name"`
-	Name            string   `json:"name"`
-	SalesName       string   `json:"sales_name"`
-	APIKey          string   `json:"-" gorm:"type:text"`
-	KeyHint         string   `json:"key_hint" gorm:"-"`
-	BaseURL         string   `json:"base_url"`
-	Protocol        string   `json:"protocol"`
-	Multiplier      float64  `json:"multiplier"`
-	FinalMultiplier *float64 `json:"final_multiplier,omitempty"`
-	CreditCost      float64  `json:"credit_cost"`
-	Revision        int      `json:"revision"`
-	ActiveVersion   int      `json:"active_version"`
+	ID                 int      `json:"id"`
+	ChannelID          int      `json:"channel_id" gorm:"uniqueIndex:idx_upstream_group_source;not null"`
+	SourceGroup        string   `json:"source_group" gorm:"size:64;uniqueIndex:idx_upstream_group_source;not null"`
+	OriginalName       string   `json:"original_name"`
+	Name               string   `json:"name"`
+	SalesName          string   `json:"sales_name"`
+	APIKey             string   `json:"-" gorm:"type:text"`
+	KeyHint            string   `json:"key_hint" gorm:"-"`
+	BaseURL            string   `json:"base_url"`
+	Protocol           string   `json:"protocol"`
+	Multiplier         float64  `json:"multiplier"`
+	FinalMultiplier    *float64 `json:"final_multiplier,omitempty"`
+	UpstreamMultiplier *float64 `json:"upstream_multiplier,omitempty" gorm:"-"`
+	CreditCost         float64  `json:"credit_cost"`
+	Revision           int      `json:"revision"`
+	ActiveVersion      int      `json:"active_version"`
 }
 
 type UpstreamQuoteModel struct {
