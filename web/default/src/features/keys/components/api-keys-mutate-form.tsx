@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
@@ -56,6 +56,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { DateTimePicker } from '@/components/datetime-picker'
 import { MultiSelect } from '@/components/multi-select'
+import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import { createApiKey, updateApiKey, getApiKey } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
@@ -67,7 +68,7 @@ import {
 } from '../lib'
 import { type ApiKey } from '../types'
 import { ApiKeyCategorySelect } from './api-key-category-select'
-import { ApiKeyGroupCards } from './api-key-group-cards'
+import { ApiKeyGroupCards, ApiKeyVendorCards } from './api-key-group-cards'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
@@ -91,8 +92,14 @@ export function ApiKeysMutateForm({
   const Content = isUpdate ? SheetContent : DialogContent
   const { triggerRefresh } = useApiKeys()
   const { status } = useStatus()
+  const {
+    models: pricingModels,
+    vendors: pricingVendors,
+    isLoading: pricingPending,
+  } = usePricingData()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [selectedVendor, setSelectedVendor] = useState('')
   const defaultUseAutoGroup = status?.default_use_auto_group === true
 
   // Fetch models
@@ -110,6 +117,14 @@ export function ApiKeysMutateForm({
   })
 
   const models = modelsData?.data || []
+  const vendorOptions = useMemo(() => {
+    const vendorNames = new Set(
+      pricingModels
+        .map((model) => model.vendor_name)
+        .filter((name): name is string => Boolean(name))
+    )
+    return pricingVendors.filter((vendor) => vendorNames.has(vendor.name))
+  }, [pricingModels, pricingVendors])
   const groupsRaw = groupsData?.success ? groupsData.data || {} : {}
   const groups: ApiKeyGroupOption[] = Object.entries(groupsRaw).map(
     ([key, info]) => ({
@@ -140,6 +155,7 @@ export function ApiKeysMutateForm({
   // Load existing data when updating
   useEffect(() => {
     if (open) setAdvancedOpen(false)
+    if (open && !isUpdate) setSelectedVendor('')
     if (open && isUpdate && currentRow) {
       // For update, fetch fresh data
       getApiKey(currentRow.id).then((result) => {
@@ -234,26 +250,46 @@ export function ApiKeysMutateForm({
   const quotaPlaceholder = tokensOnly
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
-  const nameFilter = form.watch('name').trim().toLowerCase()
-  const visibleGroups =
-    !isUpdate && nameFilter
-      ? groups.filter((group) => {
-          const searchableText = [
-            group.value,
-            group.label,
-            group.desc,
-            group.ratio,
-          ]
-            .filter((value) => value !== undefined && value !== null)
-            .join(' ')
-            .toLowerCase()
-
-          return searchableText.includes(nameFilter)
-        })
-      : groups
   const selectedGroup = form.watch('group')
+  const selectedVendorModels = selectedVendor
+    ? pricingModels.filter((model) => model.vendor_name === selectedVendor)
+    : pricingModels
+  const vendorHasAllGroups = selectedVendorModels.some((model) =>
+    model.enable_groups?.includes('all')
+  )
+  const vendorGroups = new Set(
+    selectedVendorModels.flatMap((model) => model.enable_groups ?? [])
+  )
+  const visibleGroups =
+    !isUpdate && selectedVendor && !vendorHasAllGroups
+      ? groups.filter(
+          (group) => group.value === 'auto' || vendorGroups.has(group.value)
+        )
+      : groups
   const hasSelectedGroup = groups.some((group) => group.value === selectedGroup)
   const unlimitedQuota = form.watch('unlimited_quota')
+
+  const handleVendorChange = (vendor: string) => {
+    setSelectedVendor(vendor)
+    const nextVendorModels = vendor
+      ? pricingModels.filter((model) => model.vendor_name === vendor)
+      : pricingModels
+    const nextVendorHasAllGroups = nextVendorModels.some((model) =>
+      model.enable_groups?.includes('all')
+    )
+    const nextVendorGroups = new Set(
+      nextVendorModels.flatMap((model) => model.enable_groups ?? [])
+    )
+    if (
+      vendor &&
+      selectedGroup &&
+      selectedGroup !== 'auto' &&
+      !nextVendorGroups.has(selectedGroup) &&
+      !nextVendorHasAllGroups
+    ) {
+      form.setValue('group', '')
+    }
+  }
 
   return (
     <Dialog
@@ -330,6 +366,18 @@ export function ApiKeysMutateForm({
                 />
               )}
 
+              {!isUpdate && (
+                <FormItem>
+                  <FormLabel>{t('Vendor')}</FormLabel>
+                  <ApiKeyVendorCards
+                    options={vendorOptions}
+                    value={selectedVendor}
+                    onValueChange={handleVendorChange}
+                    isLoading={pricingPending}
+                  />
+                </FormItem>
+              )}
+
               <FormField
                 control={form.control}
                 name='group'
@@ -362,7 +410,19 @@ export function ApiKeysMutateForm({
                         <ApiKeyGroupCards
                           options={visibleGroups}
                           value={field.value}
-                          onValueChange={field.onChange}
+                          onValueChange={(value) => {
+                            field.onChange(value)
+                            if (value) {
+                              const selectedOption = groups.find(
+                                (group) => group.value === value
+                              )
+                              if (selectedOption) {
+                                form.setValue('name', selectedOption.label, {
+                                  shouldValidate: true,
+                                })
+                              }
+                            }
+                          }}
                           isLoading={groupsPending}
                         />
                       </FieldSet>

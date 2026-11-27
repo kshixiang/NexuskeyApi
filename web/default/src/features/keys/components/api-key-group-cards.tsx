@@ -23,6 +23,7 @@ import { getLobeIcon } from '@/lib/lobe-icon'
 import { resolveModelProvider, type ModelProvider } from '@/lib/model-provider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
+import type { PricingVendor } from '@/features/pricing/types'
 import {
   GroupRatioBadge,
   type ApiKeyGroupOption,
@@ -36,6 +37,66 @@ type ApiKeyGroupCardsProps = {
 }
 
 const MAX_VISIBLE_PROVIDERS = 3
+
+type ApiKeyVendorCardsProps = {
+  options: PricingVendor[]
+  value?: string
+  onValueChange: (value: string) => void
+  isLoading: boolean
+}
+
+export function ApiKeyVendorCards({
+  options,
+  value,
+  onValueChange,
+  isLoading,
+}: ApiKeyVendorCardsProps) {
+  const { t } = useTranslation()
+
+  if (options.length === 0) {
+    return isLoading ? (
+      <p role='status' className='text-muted-foreground text-sm'>
+        {t('Loading...')}
+      </p>
+    ) : null
+  }
+
+  return (
+    <div className='overflow-x-auto p-1'>
+      <ToggleGroup
+        aria-label={t('Vendor')}
+        value={value ? [value] : []}
+        onValueChange={([nextValue]) => onValueChange(nextValue ?? '')}
+        variant='outline'
+        spacing={2}
+        className='grid w-full grid-cols-2 items-stretch gap-2 sm:grid-cols-4'
+      >
+        {options.map((vendor) => (
+          <ToggleGroupItem
+            key={vendor.id}
+            value={vendor.name}
+            className='aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-foreground relative h-auto min-h-24 min-w-0 flex-col gap-2 rounded-xl p-2.5 text-center whitespace-normal sm:p-3'
+          >
+            <Check
+              aria-hidden
+              className='text-primary absolute top-2 right-2 size-4 opacity-0 group-aria-pressed/toggle:opacity-100'
+            />
+            <span className='bg-muted group-aria-pressed/toggle:bg-primary/15 group-aria-pressed/toggle:text-primary flex size-10 items-center justify-center rounded-xl'>
+              {vendor.icon ? (
+                getLobeIcon(vendor.icon, 22)
+              ) : (
+                <Layers3 className='size-5' />
+              )}
+            </span>
+            <span className='w-full font-medium [overflow-wrap:anywhere]'>
+              {vendor.name}
+            </span>
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
+  )
+}
 
 export function ApiKeyGroupCards({
   options,
