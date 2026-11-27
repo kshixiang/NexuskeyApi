@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,12 +23,14 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/relay"
+	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -58,6 +61,10 @@ func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointTyp
 }
 
 func testChannel(channel *model.Channel, testModel string, endpointType string, isStream bool) testResult {
+	return runChannelTest(context.Background(), channel, testModel, endpointType, isStream, true)
+}
+
+func runChannelTest(ctx context.Context, channel *model.Channel, testModel string, endpointType string, isStream, recordUsage bool) testResult {
 	tik := time.Now()
 	var unsupportedTestChannelTypes = []int{
 		constant.ChannelTypeMidjourney,
@@ -136,29 +143,28 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 		testModel = ratio_setting.WithCompactModelSuffix(testModel)
 	}
 
-	c.Request = &http.Request{
+	c.Request = (&http.Request{
 		Method: "POST",
 		URL:    &url.URL{Path: requestPath}, // 使用动态路径
 		Body:   nil,
 		Header: make(http.Header),
-	}
+	}).WithContext(ctx)
 
-	cache, err := model.GetUserCache(1)
-	if err != nil {
-		return testResult{
-			localErr:    err,
-			newAPIError: nil,
+	if recordUsage {
+		cache, err := model.GetUserCache(1)
+		if err != nil {
+			return testResult{localErr: err}
 		}
+		cache.WriteContext(c)
+		c.Set("id", 1)
+		group, _ := model.GetUserGroup(1, false)
+		c.Set("group", group)
 	}
-	cache.WriteContext(c)
-	c.Set("id", 1)
 
 	//c.Request.Header.Set("Authorization", "Bearer "+channel.Key)
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set("channel", channel.Type)
 	c.Set("base_url", channel.GetBaseURL())
-	group, _ := model.GetUserGroup(1, false)
-	c.Set("group", group)
 
 	newAPIError := middleware.SetupContextForSelectedChannel(c, channel, testModel)
 	if newAPIError != nil {
@@ -220,6 +226,11 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 	}
 
 	request := buildTestRequest(testModel, endpointType, channel, isStream)
+	if !recordUsage {
+		if responses, ok := request.(*dto.OpenAIResponsesRequest); ok {
+			responses.MaxOutputTokens = common.GetPointer(uint(64))
+		}
+	}
 
 	info, err := relaycommon.GenRelayInfo(c, relayFormat, request, nil)
 
@@ -234,12 +245,13 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 	info.IsChannelTest = true
 	info.InitChannelMeta(c)
 
-	err = attachTestBillingRequestInput(info, request)
-	if err != nil {
-		return testResult{
-			context:     c,
-			localErr:    err,
-			newAPIError: types.NewError(err, types.ErrorCodeJsonMarshalFailed),
+	if recordUsage {
+		if err := attachTestBillingRequestInput(info, request); err != nil {
+			return testResult{
+				context:     c,
+				localErr:    err,
+				newAPIError: types.NewError(err, types.ErrorCodeJsonMarshalFailed),
+			}
 		}
 	}
 
@@ -278,14 +290,16 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 	//// 创建一个用于日志的 info 副本，移除 ApiKey
 	//logInfo := info
 	//logInfo.ApiKey = ""
-	common.SysLog(fmt.Sprintf("testing channel %d with model %s , info %+v ", channel.Id, testModel, info.ToString()))
-
-	priceData, err := helper.ModelPriceHelper(c, info, 0, request.GetTokenCountMeta())
-	if err != nil {
-		return testResult{
-			context:     c,
-			localErr:    err,
-			newAPIError: types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest)),
+	var priceData types.PriceData
+	if recordUsage {
+		common.SysLog(fmt.Sprintf("testing channel %d with model %s , info %+v ", channel.Id, testModel, info.ToString()))
+		priceData, err = helper.ModelPriceHelper(c, info, 0, request.GetTokenCountMeta())
+		if err != nil {
+			return testResult{
+				context:     c,
+				localErr:    err,
+				newAPIError: types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest)),
+			}
 		}
 	}
 
@@ -415,7 +429,12 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 
 	requestBody := bytes.NewBuffer(jsonData)
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(jsonData))
-	resp, err := adaptor.DoRequest(c, info, requestBody)
+	var resp any
+	if recordUsage {
+		resp, err = adaptor.DoRequest(c, info, requestBody)
+	} else {
+		resp, err = doUpstreamModelTestRequest(c, adaptor, info, requestBody)
+	}
 	if err != nil {
 		return testResult{
 			context:     c,
@@ -427,6 +446,17 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 	if resp != nil {
 		httpResp = resp.(*http.Response)
 		if httpResp.StatusCode != http.StatusOK {
+			if !recordUsage {
+				body := httpResp.Body
+				defer body.Close()
+				data, _ := io.ReadAll(io.LimitReader(body, 8<<10))
+				message := detectErrorMessageFromJSONBytes(bytes.TrimSpace(data))
+				err := fmt.Errorf("HTTP %d", httpResp.StatusCode)
+				if message != "" {
+					err = fmt.Errorf("%w: %s", err, message)
+				}
+				return testResult{context: c, localErr: err}
+			}
 			err := service.RelayErrorHandler(c.Request.Context(), httpResp, true)
 			common.SysError(fmt.Sprintf(
 				"channel test bad response: channel_id=%d name=%s type=%d model=%s endpoint_type=%s status=%d err=%v",
@@ -453,12 +483,15 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 			newAPIError: respErr,
 		}
 	}
-	usage, usageErr := coerceTestUsage(usageA, isStream, info.GetEstimatePromptTokens())
-	if usageErr != nil {
-		return testResult{
-			context:     c,
-			localErr:    usageErr,
-			newAPIError: types.NewOpenAIError(usageErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
+	var usage *dto.Usage
+	if recordUsage {
+		usage, err = coerceTestUsage(usageA, isStream, info.GetEstimatePromptTokens())
+		if err != nil {
+			return testResult{
+				context:     c,
+				localErr:    err,
+				newAPIError: types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
+			}
 		}
 	}
 	result := w.Result()
@@ -476,6 +509,9 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 			localErr:    bodyErr,
 			newAPIError: types.NewOpenAIError(bodyErr, types.ErrorCodeBadResponseBody, http.StatusInternalServerError),
 		}
+	}
+	if !recordUsage {
+		return testResult{context: c}
 	}
 	info.SetEstimatePromptTokens(usage.PromptTokens)
 
@@ -503,6 +539,33 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 		localErr:    nil,
 		newAPIError: nil,
 	}
+}
+
+func doUpstreamModelTestRequest(c *gin.Context, adaptor relaychannel.Adaptor, info *relaycommon.RelayInfo, body io.Reader) (*http.Response, error) {
+	requestURL, err := adaptor.GetRequestURL(info)
+	if err != nil {
+		return nil, err
+	}
+	setting := system_setting.GetFetchSetting()
+	if err := common.ValidateURLWithFetchSetting(requestURL, setting.EnableSSRFProtection, setting.AllowPrivateIp,
+		setting.DomainFilterMode, setting.IpFilterMode, setting.DomainList, setting.IpList, setting.AllowedPorts, setting.ApplyIPFilterForDomain); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, requestURL, body)
+	if err != nil {
+		return nil, err
+	}
+	if err := adaptor.SetupRequestHeader(c, &req.Header, info); err != nil {
+		return nil, err
+	}
+	sharedClient := service.GetHttpClient()
+	if sharedClient == nil {
+		sharedClient = http.DefaultClient
+	}
+	client := *sharedClient
+	// In particular, do not forward Anthropic's x-api-key to a redirect target.
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return client.Do(req)
 }
 
 func attachTestBillingRequestInput(info *relaycommon.RelayInfo, request dto.Request) error {
@@ -990,7 +1053,6 @@ func recordChannelTestHistory(channel *model.Channel, responseTimeMs int64, isSt
 		model.RecordChannelTestHistory(record)
 	})
 }
-
 
 var autoTestChannelsOnce sync.Once
 

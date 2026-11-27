@@ -26,6 +26,7 @@ import {
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Table,
   TableBody,
@@ -157,13 +158,16 @@ type Envelope<T> = { success: boolean; message: string; data: T }
 async function request<T>(
   method: 'get' | 'post' | 'put',
   path: string,
-  data?: unknown
+  data?: unknown,
+  options?: { skipBusinessError: boolean }
 ) {
-  const response = await api.request<Envelope<T>>({
+  const config = {
     method,
     url: endpoint + path,
     data,
-  })
+    ...options,
+  }
+  const response = await api.request<Envelope<T>>(config)
   if (!response.data.success) throw new Error(response.data.message)
   return response.data.data
 }
@@ -881,6 +885,156 @@ function groupFormValues(group: GroupDetail) {
   }
 }
 
+function UpstreamModelTestDialog({
+  group,
+  quotes,
+}: {
+  group: Group
+  quotes: Preview[]
+}) {
+  const { t } = useTranslation()
+  const [selectedModel, setSelectedModel] = useState('')
+  const [search, setSearch] = useState('')
+  const keyword = search.trim().toLowerCase()
+  const matchingModels = quotes.filter(({ quote }) =>
+    quote.model_id.toLowerCase().includes(keyword)
+  )
+  const model = matchingModels.some(
+    ({ quote }) => quote.model_id === selectedModel
+  )
+    ? selectedModel
+    : ''
+  const configured = Boolean(group.key_hint && group.base_url)
+  const test = useMutation({
+    mutationFn: (model: string) =>
+      request<{ elapsed_ms: number; error?: string }>(
+        'post',
+        `/groups/${group.id}/test`,
+        { model },
+        { skipBusinessError: true }
+      ),
+  })
+  const result = test.variables === model ? test.data : undefined
+  const error =
+    test.variables === model
+      ? (test.error?.message ?? result?.error)
+      : undefined
+
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={<Button type='button' variant='outline' size='sm' />}
+      >
+        {t('Test Model')}
+      </DialogTrigger>
+      <DialogContent className='max-h-[85dvh] overflow-y-auto sm:max-w-md'>
+        <DialogHeader>
+          <DialogTitle>{t('Test Model')}</DialogTitle>
+          <DialogDescription className='break-words'>
+            {group.name} · {t("Uses the group's saved upstream settings.")}
+          </DialogDescription>
+        </DialogHeader>
+        <div className='flex min-w-0 flex-col gap-4'>
+          {quotes.length > 0 ? (
+            <FieldGroup className='gap-2'>
+              <Field>
+                <FieldLabel htmlFor='upstream-test-search'>
+                  {t('Select Model')}
+                </FieldLabel>
+                <Input
+                  id='upstream-test-search'
+                  type='search'
+                  placeholder={t('Search models...')}
+                  disabled={test.isPending}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </Field>
+              {matchingModels.length > 0 ? (
+                <RadioGroup
+                  aria-label={t('Model')}
+                  className='max-h-52 gap-0.5 overflow-y-auto rounded-lg border p-1'
+                  disabled={test.isPending}
+                  value={model}
+                  onValueChange={(value: string) => {
+                    setSelectedModel(value)
+                    test.reset()
+                  }}
+                >
+                  {matchingModels.map(({ quote }) => {
+                    const id = `upstream-test-${group.id}-${encodeURIComponent(quote.model_id)}`
+                    return (
+                      <FieldLabel
+                        key={quote.model_id}
+                        htmlFor={id}
+                        className='hover:bg-accent has-data-checked:bg-accent w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5'
+                      >
+                        <RadioGroupItem id={id} value={quote.model_id} />
+                        <span className='min-w-0 [overflow-wrap:anywhere]'>
+                          {quote.model_id}
+                        </span>
+                      </FieldLabel>
+                    )
+                  })}
+                </RadioGroup>
+              ) : (
+                <p className='text-muted-foreground' role='status'>
+                  {t('No models found')}
+                </p>
+              )}
+            </FieldGroup>
+          ) : (
+            <p className='text-muted-foreground'>
+              {t('No models available for this group')}
+            </p>
+          )}
+          {!configured && (
+            <p className='text-muted-foreground'>
+              {t('Save the upstream API key and base URL before testing.')}
+            </p>
+          )}
+          {(test.isPending || result || error) && (
+            <div role='status' className='flex min-w-0 flex-col gap-1'>
+              {test.isPending ? (
+                <span>{t('Testing...')}</span>
+              ) : (
+                <div className='flex flex-wrap items-center gap-2'>
+                  <Badge variant={error ? 'destructive' : 'secondary'}>
+                    {error ? t('Failed') : t('Success')}
+                  </Badge>
+                  {result && (
+                    <span className='text-muted-foreground tabular-nums'>
+                      {t('Response Time')} ·{' '}
+                      {t('{{value}}ms', { value: result.elapsed_ms })}
+                    </span>
+                  )}
+                </div>
+              )}
+              {error && (
+                <p className='text-destructive [overflow-wrap:anywhere]'>
+                  {t(error, { defaultValue: error })}
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose render={<Button type='button' variant='outline' />}>
+              {t('Close')}
+            </DialogClose>
+            <Button
+              type='button'
+              disabled={!model || !configured || test.isPending}
+              onClick={() => test.mutate(model)}
+            >
+              {t('Test Connection')}
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function GroupSettings({
   group,
   importedAt,
@@ -1128,10 +1282,11 @@ function GroupSettings({
           </Button>
         </div>
       </form>
-      <div className='flex items-center justify-between gap-3 rounded-lg border p-3'>
-        <span className='text-sm font-medium'>
+      <div className='flex flex-wrap items-center gap-3 rounded-lg border p-3'>
+        <span className='flex-1 text-sm font-medium'>
           {t('Models in this group')} ({quotes.length})
         </span>
+        <UpstreamModelTestDialog group={group} quotes={quotes} />
         <GroupQuotesDialog
           name={group.name}
           actions={

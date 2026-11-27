@@ -1,9 +1,12 @@
 package controller
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/service"
@@ -112,6 +115,34 @@ func SaveUpstreamQuoteGroup(c *gin.Context) {
 	if id := upstreamQuoteID(c); id > 0 && upstreamQuoteBody(c, &input) {
 		upstreamQuoteResult(c, nil, service.SaveUpstreamGroupConfig(id, input))
 	}
+}
+
+func TestUpstreamQuoteGroupModel(c *gin.Context) {
+	var input struct {
+		Model string `json:"model"`
+	}
+	id := upstreamQuoteID(c)
+	if id == 0 || !upstreamQuoteBody(c, &input) {
+		return
+	}
+	channel, upstreamModel, endpoint, err := service.LoadUpstreamGroupModelTest(id, input.Model)
+	if err != nil {
+		upstreamQuoteResult(c, nil, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	result := runChannelTest(ctx, &channel, upstreamModel, string(endpoint), false, false)
+	data := gin.H{"elapsed_ms": time.Since(start).Milliseconds()}
+	if result.localErr != nil {
+		message := strings.ReplaceAll(result.localErr.Error(), channel.Key, "[redacted]")
+		if chars := []rune(message); len(chars) > 512 {
+			message = string(chars[:512]) + "…"
+		}
+		data["error"] = message
+	}
+	upstreamQuoteResult(c, data, nil)
 }
 
 func PublishUpstreamQuoteGroup(c *gin.Context) {

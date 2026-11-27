@@ -559,12 +559,8 @@ func SaveUpstreamGroupConfig(id int, input UpstreamGroupConfig) error {
 		if err != nil {
 			return err
 		}
-		_, _, domain := upstreamSource(source)
-		parsed, err := url.Parse(base)
-		if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
-			(parsed.Port() != "" && parsed.Port() != "443") || domain == "" ||
-			(parsed.Hostname() != domain && !strings.HasSuffix(parsed.Hostname(), "."+domain)) {
-			return fmt.Errorf("enter an HTTPS API base URL for %s", domain)
+		if err := validateUpstreamGroupBaseURL(base, source); err != nil {
+			return err
 		}
 		base = strings.TrimSuffix(base, "/v1")
 	}
@@ -581,6 +577,91 @@ func SaveUpstreamGroupConfig(id int, input UpstreamGroupConfig) error {
 		values["api_key"] = key
 	}
 	return updateUpstreamDraft(model.DB, id, input.Revision, values)
+}
+
+func validateUpstreamGroupBaseURL(base, source string) error {
+	_, _, domain := upstreamSource(source)
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		(parsed.Port() != "" && parsed.Port() != "443") || domain == "" ||
+		(parsed.Hostname() != domain && !strings.HasSuffix(parsed.Hostname(), "."+domain)) {
+		return fmt.Errorf("enter an HTTPS API base URL for %s", domain)
+	}
+	return nil
+}
+
+func LoadUpstreamGroupModelTest(id int, modelID string) (model.Channel, string, constant.EndpointType, error) {
+	var channel model.Channel
+	if !validUpstreamModel(modelID) {
+		return channel, "", "", errors.New("Select Model")
+	}
+	var row struct {
+		APIKey   string
+		BaseURL  string
+		Protocol string
+		Source   string
+		Snapshot string
+	}
+	err := model.DB.Table("upstream_quote_groups AS grp").
+		Select("grp.api_key, grp.base_url, grp.protocol, ch.source, qv.snapshot").
+		Joins("JOIN upstream_quote_channels AS ch ON ch.id = grp.channel_id").
+		Joins("JOIN upstream_quote_models AS qm ON qm.group_id = grp.id").
+		Joins("JOIN upstream_quote_versions AS qv ON qv.id = qm.quote_version AND qv.group_id = grp.id").
+		Where("grp.id = ? AND qm.model_id = ?", id, modelID).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return channel, "", "", errors.New("No models available for this group")
+	}
+	if err != nil {
+		return channel, "", "", err
+	}
+	if row.APIKey == "" || row.BaseURL == "" {
+		return channel, "", "", errors.New("Save the upstream API key and base URL before testing.")
+	}
+	if err := validateUpstreamGroupBaseURL(row.BaseURL, row.Source); err != nil {
+		return channel, "", "", err
+	}
+	var quote UpstreamQuote
+	if err := common.UnmarshalJsonStr(row.Snapshot, &quote); err != nil {
+		return channel, "", "", err
+	}
+	endpoint := upstreamModelTestEndpoint(row.Protocol, quote)
+	if endpoint == "" {
+		return channel, "", "", errors.New("This model has no supported test endpoint for the group's API protocol.")
+	}
+	channel = model.Channel{Type: constant.ChannelTypeOpenAI, Key: row.APIKey, BaseURL: &row.BaseURL}
+	if row.Protocol == "anthropic" {
+		channel.Type = constant.ChannelTypeAnthropic
+	}
+	return channel, quote.ModelID, endpoint, nil
+}
+
+func upstreamModelTestEndpoint(protocol string, quote UpstreamQuote) constant.EndpointType {
+	if quote.Kind == "video" {
+		return ""
+	}
+	if protocol == "anthropic" {
+		if quote.Kind != "image" && (len(quote.Endpoints) == 0 || slices.Contains(quote.Endpoints, string(constant.EndpointTypeAnthropic))) {
+			return constant.EndpointTypeAnthropic
+		}
+		return ""
+	}
+	if protocol != "openai" {
+		return ""
+	}
+	if quote.Kind == "image" {
+		return constant.EndpointTypeImageGeneration
+	}
+	for _, endpoint := range quote.Endpoints {
+		switch constant.EndpointType(endpoint) {
+		case constant.EndpointTypeOpenAI, constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAIResponseCompact,
+			constant.EndpointTypeImageGeneration, constant.EndpointTypeEmbeddings, constant.EndpointTypeJinaRerank:
+			return constant.EndpointType(endpoint)
+		}
+	}
+	if len(quote.Endpoints) == 0 {
+		return constant.EndpointTypeOpenAI
+	}
+	return ""
 }
 
 func loadUpstreamQuotes(tx *gorm.DB, id int) ([]UpstreamQuotePreview, error) {
