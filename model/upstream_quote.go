@@ -182,6 +182,12 @@ func PublishedUpstreamGroupModels(group string) map[string][]constant.EndpointTy
 }
 
 func PublishedUpstreamPricing() ([]Pricing, error) {
+	prices, _, err := PublishedUpstreamPricingWithVendors()
+	return prices, err
+}
+
+// PublishedUpstreamPricingWithVendors returns metadata and vendors from the same lookup.
+func PublishedUpstreamPricingWithVendors() ([]Pricing, []PricingVendor, error) {
 	var rows []struct {
 		UpstreamSaleModel `gorm:"embedded"`
 		GroupID           int
@@ -189,10 +195,26 @@ func PublishedUpstreamPricing() ([]Pricing, error) {
 		FinalMultiplier   *float64
 	}
 	err := activeUpstreamSaleModels().Select("sale.*, grp.id AS group_id, grp.sales_name, ver.final_multiplier").Order("grp.id, sale.model_name").Scan(&rows).Error
+	if err != nil {
+		return nil, nil, err
+	}
+	modelNames := make([]string, 0, len(rows))
+	for _, row := range rows {
+		modelNames = append(modelNames, row.ModelName)
+	}
+	metaMap, vendors, err := loadPricingMetadata(modelNames)
+	if err != nil {
+		return nil, nil, err
+	}
 	prices := make([]Pricing, 0, len(rows))
 	for _, row := range rows {
 		group := UpstreamSaleGroupKey(row.GroupID)
 		price := Pricing{ModelName: row.ModelName, EnableGroup: []string{group}, SaleGroup: group, SaleGroupName: row.SalesName}
+		meta := metaMap[row.ModelName]
+		price.VendorID = meta.VendorID
+		price.Description = meta.Description
+		price.Icon = meta.Icon
+		price.Tags = meta.Tags
 		price.SaleGroupMultiplier = row.FinalMultiplier
 		for _, endpoint := range strings.Split(row.Endpoints, ",") {
 			price.SupportedEndpointTypes = append(price.SupportedEndpointTypes, constant.EndpointType(endpoint))
@@ -206,5 +228,5 @@ func PublishedUpstreamPricing() ([]Pricing, error) {
 		}
 		prices = append(prices, price)
 	}
-	return prices, err
+	return prices, vendors, nil
 }

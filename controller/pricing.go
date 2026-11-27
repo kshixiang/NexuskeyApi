@@ -36,6 +36,7 @@ func filterPricingByUsableGroups(pricing []model.Pricing, usableGroup map[string
 
 func GetPricing(c *gin.Context) {
 	pricing := model.GetPricing()
+	vendors := model.GetVendors()
 	userId, exists := c.Get("id")
 	usableGroup := map[string]string{}
 	groupRatio := map[string]float64{}
@@ -61,8 +62,9 @@ func GetPricing(c *gin.Context) {
 	for key, endpoint := range model.GetSupportedEndpointMap() {
 		supportedEndpoints[key] = endpoint
 	}
-	published, err := model.PublishedUpstreamPricing()
+	published, publishedVendors, err := model.PublishedUpstreamPricingWithVendors()
 	if err == nil {
+		vendors = publishedVendors
 		current := make([]model.Pricing, 0, len(pricing)+len(published))
 		for _, price := range pricing {
 			groups := make([]string, 0, len(price.EnableGroup))
@@ -99,7 +101,7 @@ func GetPricing(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"success":            true,
 		"data":               pricing,
-		"vendors":            model.GetVendors(),
+		"vendors":            vendors,
 		"group_ratio":        groupRatio,
 		"usable_group":       usableGroup,
 		"supported_endpoint": supportedEndpoints,

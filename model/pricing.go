@@ -117,79 +117,16 @@ func updatePricing() {
 		common.SysLog(fmt.Sprintf("GetAllEnableAbilityWithChannels error: %v", err))
 		return
 	}
-	// 预加载模型元数据与供应商一次，避免循环查询
-	var allMeta []Model
-	_ = DB.Find(&allMeta).Error
-	metaMap := make(map[string]*Model)
-	prefixList := make([]*Model, 0)
-	suffixList := make([]*Model, 0)
-	containsList := make([]*Model, 0)
-	for i := range allMeta {
-		m := &allMeta[i]
-		if m.NameRule == NameRuleExact {
-			metaMap[m.ModelName] = m
-		} else {
-			switch m.NameRule {
-			case NameRulePrefix:
-				prefixList = append(prefixList, m)
-			case NameRuleSuffix:
-				suffixList = append(suffixList, m)
-			case NameRuleContains:
-				containsList = append(containsList, m)
-			}
-		}
+	modelNames := make([]string, 0, len(enableAbilities))
+	for _, ability := range enableAbilities {
+		modelNames = append(modelNames, ability.Model)
 	}
-
-	// 将非精确规则模型匹配到 metaMap
-	for _, m := range prefixList {
-		for _, pricingModel := range enableAbilities {
-			if strings.HasPrefix(pricingModel.Model, m.ModelName) {
-				if _, exists := metaMap[pricingModel.Model]; !exists {
-					metaMap[pricingModel.Model] = m
-				}
-			}
-		}
+	metaMap, vendors, err := loadPricingMetadata(modelNames)
+	if err != nil {
+		common.SysLog(fmt.Sprintf("loadPricingMetadata error: %v", err))
+		return
 	}
-	for _, m := range suffixList {
-		for _, pricingModel := range enableAbilities {
-			if strings.HasSuffix(pricingModel.Model, m.ModelName) {
-				if _, exists := metaMap[pricingModel.Model]; !exists {
-					metaMap[pricingModel.Model] = m
-				}
-			}
-		}
-	}
-	for _, m := range containsList {
-		for _, pricingModel := range enableAbilities {
-			if strings.Contains(pricingModel.Model, m.ModelName) {
-				if _, exists := metaMap[pricingModel.Model]; !exists {
-					metaMap[pricingModel.Model] = m
-				}
-			}
-		}
-	}
-
-	// 预加载供应商
-	var vendors []Vendor
-	_ = DB.Find(&vendors).Error
-	vendorMap := make(map[int]*Vendor)
-	for i := range vendors {
-		vendorMap[vendors[i].Id] = &vendors[i]
-	}
-
-	// 初始化默认供应商映射
-	initDefaultVendorMapping(metaMap, vendorMap, enableAbilities)
-
-	// 构建对前端友好的供应商列表
-	vendorsList = make([]PricingVendor, 0, len(vendorMap))
-	for _, v := range vendorMap {
-		vendorsList = append(vendorsList, PricingVendor{
-			ID:          v.Id,
-			Name:        v.Name,
-			Description: v.Description,
-			Icon:        v.Icon,
-		})
-	}
+	vendorsList = vendors
 
 	modelGroupsMap := make(map[string]*types.Set[string])
 
