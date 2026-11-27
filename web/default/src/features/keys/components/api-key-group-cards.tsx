@@ -23,7 +23,7 @@ import { getLobeIcon } from '@/lib/lobe-icon'
 import { resolveModelProvider, type ModelProvider } from '@/lib/model-provider'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
-import type { PricingVendor } from '@/features/pricing/types'
+import type { ApiKeyVendorOption } from '../lib/api-key-vendor-groups'
 import {
   GroupRatioBadge,
   type ApiKeyGroupOption,
@@ -39,7 +39,7 @@ type ApiKeyGroupCardsProps = {
 const MAX_VISIBLE_PROVIDERS = 3
 
 type ApiKeyVendorCardsProps = {
-  options: PricingVendor[]
+  options: ApiKeyVendorOption[]
   value?: string
   onValueChange: (value: string) => void
   isLoading: boolean
@@ -73,8 +73,8 @@ export function ApiKeyVendorCards({
       >
         {options.map((vendor) => (
           <ToggleGroupItem
-            key={vendor.id}
-            value={vendor.name}
+            key={vendor.value}
+            value={vendor.value}
             className='aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-foreground relative h-auto min-h-24 min-w-0 flex-col gap-2 rounded-xl p-2.5 text-center whitespace-normal sm:p-3'
           >
             <Check
@@ -89,7 +89,7 @@ export function ApiKeyVendorCards({
               )}
             </span>
             <span className='w-full font-medium [overflow-wrap:anywhere]'>
-              {vendor.name}
+              {vendor.label}
             </span>
           </ToggleGroupItem>
         ))}

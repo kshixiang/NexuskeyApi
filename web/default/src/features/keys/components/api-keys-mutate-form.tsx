@@ -25,7 +25,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
-import { resolveModelProvider } from '@/lib/model-provider'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
@@ -58,7 +57,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { DateTimePicker } from '@/components/datetime-picker'
 import { MultiSelect } from '@/components/multi-select'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
-import type { PricingModel, PricingVendor } from '@/features/pricing/types'
 import { createApiKey, updateApiKey, getApiKey } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
@@ -68,6 +66,7 @@ import {
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
+import { getApiKeyVendorOptions } from '../lib/api-key-vendor-groups'
 import { type ApiKey } from '../types'
 import { ApiKeyCategorySelect } from './api-key-category-select'
 import { ApiKeyGroupCards, ApiKeyVendorCards } from './api-key-group-cards'
@@ -84,28 +83,6 @@ type ApiKeysMutateFormProps = {
   currentRow?: ApiKey
 }
 
-function getInferredVendor(model: PricingModel): PricingVendor | null {
-  const provider = resolveModelProvider(model.model_name)
-  if (!provider) return null
-
-  return {
-    id: -1,
-    name: provider.label === 'Claude' ? 'Anthropic' : provider.label,
-    icon: provider.icon,
-  }
-}
-
-function modelMatchesVendor(model: PricingModel, vendor: PricingVendor) {
-  if (model.vendor_name === vendor.name) return true
-
-  const inferredVendor = getInferredVendor(model)
-  return Boolean(
-    inferredVendor &&
-    (inferredVendor.name === vendor.name ||
-      (inferredVendor.icon && inferredVendor.icon === vendor.icon))
-  )
-}
-
 export function ApiKeysMutateForm({
   open,
   onOpenChange,
@@ -120,6 +97,7 @@ export function ApiKeysMutateForm({
     models: pricingModels,
     vendors: pricingVendors,
     isLoading: pricingPending,
+    error: pricingError,
   } = usePricingData()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -142,32 +120,25 @@ export function ApiKeysMutateForm({
 
   const models = modelsData?.data || []
   const vendorOptions = useMemo(() => {
-    const options = pricingVendors.filter((vendor) =>
-      pricingModels.some((model) => modelMatchesVendor(model, vendor))
-    )
-    const knownVendors = new Set(
-      options.flatMap((vendor) => [vendor.name, vendor.icon])
-    )
-
-    for (const model of pricingModels) {
-      const inferredVendor = getInferredVendor(model)
-      if (!inferredVendor) continue
-      if (
-        knownVendors.has(inferredVendor.name) ||
-        knownVendors.has(inferredVendor.icon)
-      ) {
-        continue
-      }
-      options.push({
-        ...inferredVendor,
-        id: -(options.length + 1),
-      })
-      knownVendors.add(inferredVendor.name)
-      knownVendors.add(inferredVendor.icon)
+    if (isUpdate || pricingPending || pricingError || !groupsData?.success) {
+      return []
     }
 
-    return options
-  }, [pricingModels, pricingVendors])
+    return getApiKeyVendorOptions(
+      Object.keys(groupsData.data ?? {}),
+      pricingModels,
+      pricingVendors,
+      t('Other Vendors')
+    )
+  }, [
+    groupsData,
+    isUpdate,
+    pricingError,
+    pricingModels,
+    pricingPending,
+    pricingVendors,
+    t,
+  ])
   const groupsRaw = groupsData?.success ? groupsData.data || {} : {}
   const groups: ApiKeyGroupOption[] = Object.entries(groupsRaw).map(
     ([key, info]) => ({
@@ -195,6 +166,20 @@ export function ApiKeysMutateForm({
     defaultValues: getApiKeyFormDefaultValues(defaultUseAutoGroup),
   })
 
+  const selectedGroup = form.watch('group')
+  const selectedVendorOption = vendorOptions.find(
+    (vendor) => vendor.value === selectedVendor
+  )
+  const visibleGroups = selectedVendorOption
+    ? groups.filter(
+        (group) =>
+          group.value === 'auto' || selectedVendorOption.groups.has(group.value)
+      )
+    : groups
+  const hasSelectedGroup = visibleGroups.some(
+    (group) => group.value === selectedGroup
+  )
+
   // Load existing data when updating
   useEffect(() => {
     if (open) setAdvancedOpen(false)
@@ -213,7 +198,10 @@ export function ApiKeysMutateForm({
   }, [open, isUpdate, currentRow, form, defaultUseAutoGroup])
 
   const onSubmit = async (data: ApiKeyFormValues) => {
-    if (!isUpdate && !groups.some((group) => group.value === data.group)) {
+    if (
+      !isUpdate &&
+      !visibleGroups.some((group) => group.value === data.group)
+    ) {
       form.setError('group', { message: t('Group is required') })
       return
     }
@@ -293,50 +281,16 @@ export function ApiKeysMutateForm({
   const quotaPlaceholder = tokensOnly
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
-  const selectedGroup = form.watch('group')
-  const selectedVendorOption = vendorOptions.find(
-    (vendor) => vendor.name === selectedVendor
-  )
-  const selectedVendorModels = selectedVendor
-    ? pricingModels.filter((model) =>
-        selectedVendorOption
-          ? modelMatchesVendor(model, selectedVendorOption)
-          : false
-      )
-    : pricingModels
-  const vendorHasAllGroups = selectedVendorModels.some((model) =>
-    model.enable_groups?.includes('all')
-  )
-  const vendorGroups = new Set(
-    selectedVendorModels.flatMap((model) => model.enable_groups ?? [])
-  )
-  const visibleGroups =
-    !isUpdate && selectedVendor && !vendorHasAllGroups
-      ? groups.filter(
-          (group) => group.value === 'auto' || vendorGroups.has(group.value)
-        )
-      : groups
-  const hasSelectedGroup = groups.some((group) => group.value === selectedGroup)
   const unlimitedQuota = form.watch('unlimited_quota')
 
   const handleVendorChange = (vendor: string) => {
     setSelectedVendor(vendor)
-    const nextVendor = vendorOptions.find((option) => option.name === vendor)
-    const nextVendorModels = nextVendor
-      ? pricingModels.filter((model) => modelMatchesVendor(model, nextVendor))
-      : pricingModels
-    const nextVendorHasAllGroups = nextVendorModels.some((model) =>
-      model.enable_groups?.includes('all')
-    )
-    const nextVendorGroups = new Set(
-      nextVendorModels.flatMap((model) => model.enable_groups ?? [])
-    )
+    const nextVendor = vendorOptions.find((option) => option.value === vendor)
     if (
-      vendor &&
+      nextVendor &&
       selectedGroup &&
       selectedGroup !== 'auto' &&
-      !nextVendorGroups.has(selectedGroup) &&
-      !nextVendorHasAllGroups
+      !nextVendor.groups.has(selectedGroup)
     ) {
       form.setValue('group', '')
     }
@@ -422,9 +376,9 @@ export function ApiKeysMutateForm({
                   <FormLabel>{t('Vendor')}</FormLabel>
                   <ApiKeyVendorCards
                     options={vendorOptions}
-                    value={selectedVendor}
+                    value={selectedVendorOption?.value}
                     onValueChange={handleVendorChange}
-                    isLoading={pricingPending}
+                    isLoading={pricingPending || groupsPending}
                   />
                 </FormItem>
               )}
