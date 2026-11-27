@@ -32,11 +32,13 @@ type UpstreamImportGroup struct {
 }
 
 type UpstreamImportChange struct {
-	Group    string         `json:"group"`
-	Model    string         `json:"model"`
-	Status   string         `json:"status"`
-	Previous *UpstreamQuote `json:"previous,omitempty"`
-	Incoming *UpstreamQuote `json:"incoming,omitempty"`
+	Group              string         `json:"group"`
+	Model              string         `json:"model"`
+	Status             string         `json:"status"`
+	Previous           *UpstreamQuote `json:"previous,omitempty"`
+	PreviousMultiplier *float64       `json:"previous_multiplier,omitempty"`
+	Incoming           *UpstreamQuote `json:"incoming,omitempty"`
+	IncomingMultiplier *float64       `json:"incoming_multiplier,omitempty"`
 }
 
 type UpstreamImportGroupPreview struct {
@@ -171,11 +173,6 @@ func PreviewUpstreamImportGroups(input UpstreamImport) ([]UpstreamImportGroupPre
 			Changes: make([]UpstreamImportChange, 0, len(item.Quotes)),
 		}
 		multipliers := upstreamGroupMultipliers{}
-		for _, quote := range item.Quotes {
-			group, _ := upstreamQuoteMultipliers(quote)
-			multipliers.add(group, 0)
-		}
-		preview.UpstreamMultiplier = multipliers.common()
 		var group model.UpstreamQuoteGroup
 		if channel.ID > 0 {
 			err := findUpstreamImportGroup(model.DB, channel.ID, item, &group)
@@ -194,10 +191,15 @@ func PreviewUpstreamImportGroups(input UpstreamImport) ([]UpstreamImportGroupPre
 			}
 		}
 		for _, quote := range item.Quotes {
-			change := UpstreamImportChange{Group: item.Name, Model: quote.ModelID, Status: "new", Incoming: &quote}
+			groupRate, modelRate := upstreamQuoteMultipliers(quote)
+			multipliers.add(groupRate, 0)
+			change := UpstreamImportChange{
+				Group: item.Name, Model: quote.ModelID, Status: "new", Incoming: &quote, IncomingMultiplier: modelRate,
+			}
 			key := strings.ToLower(quote.ModelID)
 			if previous, ok := prior[key]; ok {
 				change.Previous = &previous.Quote
+				_, change.PreviousMultiplier = upstreamQuoteMultipliers(previous.Quote)
 				oldJSON, _ := common.Marshal(previous.Quote)
 				newJSON, _ := common.Marshal(quote)
 				change.Status = "changed"
@@ -212,8 +214,12 @@ func PreviewUpstreamImportGroups(input UpstreamImport) ([]UpstreamImportGroupPre
 			preview.Changes = append(preview.Changes, change)
 		}
 		for _, previous := range prior {
-			preview.Changes = append(preview.Changes, UpstreamImportChange{Group: item.Name, Model: previous.Quote.ModelID, Status: "not_seen", Previous: &previous.Quote})
+			_, modelRate := upstreamQuoteMultipliers(previous.Quote)
+			preview.Changes = append(preview.Changes, UpstreamImportChange{
+				Group: item.Name, Model: previous.Quote.ModelID, Status: "not_seen", Previous: &previous.Quote, PreviousMultiplier: modelRate,
+			})
 		}
+		preview.UpstreamMultiplier = multipliers.common()
 		groups = append(groups, preview)
 	}
 	return groups, nil

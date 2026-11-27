@@ -293,12 +293,19 @@ func upstreamQuoteMultipliers(quote UpstreamQuote) (group, applied *float64) {
 		Model struct {
 			Rate *float64 `json:"rate_multiplier"`
 		} `json:"model"`
+		Row struct {
+			Rate *float64 `json:"price_multiplier"`
+		} `json:"row"`
 	}
 	if len(quote.Reference) == 0 || common.Unmarshal(quote.Reference, &source) != nil {
 		return nil, nil
 	}
 	if source.Model.Rate != nil {
 		return source.Group, source.Model.Rate
+	}
+	// String AI publishes model rates alongside prices that already include them.
+	if source.Row.Rate != nil && validUpstreamAmount(*source.Row.Rate) {
+		return source.Group, source.Row.Rate
 	}
 	return source.Group, source.Group
 }

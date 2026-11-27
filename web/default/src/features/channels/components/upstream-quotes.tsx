@@ -123,7 +123,9 @@ type Change = {
   model: string
   status: string
   previous?: Quote
+  previous_multiplier?: number
   incoming?: Quote
+  incoming_multiplier?: number
 }
 type ImportGroupPreview = {
   id: string
@@ -555,9 +557,10 @@ function ImportQuotes({
                     {group.changes.length}
                   </td>
                   <td className='p-2 text-right tabular-nums'>
-                    {group.upstream_multiplier == null
-                      ? '—'
-                      : formatQuoteMultiplier(group.upstream_multiplier)}
+                    {formatUpstreamMultipliers(
+                      group.upstream_multiplier,
+                      group.changes.map((change) => change.incoming_multiplier)
+                    )}
                   </td>
                   <td className='p-2 text-right'>
                     <GroupQuotesDialog name={group.name}>
@@ -669,10 +672,16 @@ function ImportQuoteChanges({ changes }: { changes: Change[] }) {
               {t(changeLabels[change.status] ?? change.status)}
             </td>
             <td className='p-2'>
-              <QuoteRates quote={change.previous} factor={1} />
+              <UpstreamQuoteRates
+                quote={change.previous}
+                multiplier={change.previous_multiplier}
+              />
             </td>
             <td className='p-2'>
-              <QuoteRates quote={change.incoming} factor={1} />
+              <UpstreamQuoteRates
+                quote={change.incoming}
+                multiplier={change.incoming_multiplier}
+              />
             </td>
           </tr>
         ))}
@@ -693,6 +702,20 @@ function formatQuoteMultiplier(value: number) {
     new Intl.NumberFormat(undefined, { maximumSignificantDigits: 12 }).format(
       value
     ) + '×'
+  )
+}
+
+function formatUpstreamMultipliers(
+  groupMultiplier: number | undefined,
+  modelMultipliers: (number | undefined)[]
+) {
+  if (groupMultiplier != null) return formatQuoteMultiplier(groupMultiplier)
+  const rates = [...new Set(modelMultipliers.filter((rate) => rate != null))]
+  return (
+    rates
+      .sort((a, b) => a - b)
+      .map(formatQuoteMultiplier)
+      .join(' / ') || '—'
   )
 }
 
@@ -810,6 +833,16 @@ function GroupSettings({
     ? confirmAll.error.response?.data?.message || confirmAll.error.message
     : confirmAll.error?.message
   const costMultiplier = group.upstream_multiplier
+  const latestQuoteImport = quotes.reduce(
+    (latest, item) => Math.max(latest, item.last_seen_import),
+    0
+  )
+  const upstreamMultipliers = formatUpstreamMultipliers(
+    costMultiplier,
+    quotes
+      .filter((item) => item.last_seen_import === latestQuoteImport)
+      .map((item) => item.upstream_multiplier)
+  )
   const margin =
     ratio > 0 && (!finalMode || costMultiplier != null)
       ? ((1 - (costMultiplier ?? 1) / ratio) * 100).toFixed(2) + '%'
@@ -917,10 +950,8 @@ function GroupSettings({
           <span className='text-sm font-medium'>
             {t('Upstream multiplier')}
           </span>
-          <p className='flex h-8 items-center font-mono tabular-nums'>
-            {costMultiplier == null
-              ? '—'
-              : formatQuoteMultiplier(costMultiplier)}
+          <p className='flex min-h-8 items-center font-mono tabular-nums'>
+            {upstreamMultipliers}
           </p>
         </div>
         <QuoteField
@@ -1109,7 +1140,10 @@ function SavedGroupQuotes(props: {
                 </span>
               </th>
               <td className='p-2'>
-                <QuoteRates quote={item.quote} factor={1} />
+                <UpstreamQuoteRates
+                  quote={item.quote}
+                  multiplier={sourceMultiplier}
+                />
               </td>
               <td className='p-2'>
                 {adjustment > 0 &&
@@ -1585,6 +1619,26 @@ function QuoteField({
         onChange={(event) => onChange(event.target.value)}
       />
     </div>
+  )
+}
+
+function UpstreamQuoteRates({
+  quote,
+  multiplier,
+}: {
+  quote?: Quote
+  multiplier?: number
+}) {
+  const { t } = useTranslation()
+  return (
+    <>
+      {multiplier != null && (
+        <div className='text-muted-foreground mb-1 text-xs'>
+          {t('Upstream multiplier')} · {formatQuoteMultiplier(multiplier)}
+        </div>
+      )}
+      <QuoteRates quote={quote} factor={1} />
+    </>
   )
 }
 

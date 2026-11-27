@@ -4,10 +4,86 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+func TestStringQuoteModelMultipliers(t *testing.T) {
+	snapshot := []byte(`{"code":0,"data":{"model_pricing_sections":[{"source_name":"OpenAI","rows":[
+		{"models":["gpt-astra"],"billing_mode":"token","price_multiplier":0.2,"effective_input_usd_per_mtok":1.6},
+		{"models":["gpt-luna"],"billing_mode":"token","price_multiplier":1.8},
+		{"models":["gpt-unpriced"],"billing_mode":"token"}
+	]}]}}`)
+	imported, err := ParseUpstreamQuoteSnapshot("string", snapshot)
+	require.NoError(t, err)
+	require.Len(t, imported.Groups, 1)
+	quotes := imported.Groups[0].Quotes
+	require.Len(t, quotes, 3)
+	for index, want := range []float64{0.2, 1.8} {
+		group, model := upstreamQuoteMultipliers(quotes[index])
+		require.Nil(t, group)
+		require.NotNil(t, model)
+		require.Equal(t, want, *model)
+	}
+	_, missing := upstreamQuoteMultipliers(quotes[2])
+	require.Nil(t, missing)
+	require.Len(t, quotes[0].Tiers, 1)
+	require.NotNil(t, quotes[0].Tiers[0].Input)
+	require.Equal(t, 1.6, *quotes[0].Tiers[0].Input)
+}
+
+func TestStringQuoteStoredSnapshotPricing(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { require.NoError(t, sqlDB.Close()) })
+	require.NoError(t, db.AutoMigrate(&model.UpstreamQuoteGroup{}, &model.UpstreamQuoteModel{},
+		&model.UpstreamQuoteVersion{}, &model.UpstreamSaleVersion{}))
+
+	group := model.UpstreamQuoteGroup{ChannelID: 1, SourceGroup: "openai:2", Protocol: "openai", Multiplier: 1}
+	require.NoError(t, db.Create(&group).Error)
+	// Seed the JSON shape saved before String AI multipliers were exposed.
+	version := model.UpstreamQuoteVersion{GroupID: group.ID, Snapshot: `{
+		"model_id":"gpt-astra","kind":"token","unit":"usd","confirmed":true,"usage_verified":true,
+		"endpoints":["openai"],"tiers":[{"name":"base","input":1.6,"output":8}],
+		"reference":{"row":{"price_multiplier":0.2,"input_usd_per_mtok":8,"output_usd_per_mtok":40,
+			"effective_input_usd_per_mtok":1.6,"effective_output_usd_per_mtok":8},"credits_fx_rate":1}
+	}`}
+	require.NoError(t, db.Create(&version).Error)
+	require.NoError(t, db.Create(&model.UpstreamQuoteModel{
+		GroupID: group.ID, ModelID: "gpt-astra", QuoteVersion: version.ID,
+	}).Error)
+
+	for _, tc := range []struct {
+		name   string
+		markup float64
+		want   float64
+	}{
+		{name: "at upstream cost", markup: 1, want: 0.24},
+		{name: "with local markup", markup: 1.5, want: 0.36},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			preview, err := previewUpstreamGroup(db, group.ID, &tc.markup)
+			require.NoError(t, err)
+			require.Len(t, preview.Quotes, 1)
+			item := preview.Quotes[0]
+			require.Equal(t, version.ID, item.QuoteVersion)
+			require.NotNil(t, item.UpstreamMultiplier)
+			require.Equal(t, 0.2, *item.UpstreamMultiplier)
+			require.Empty(t, item.Error)
+			require.NotNil(t, item.Sale)
+			amount, _, err := billingexpr.RunExpr(item.Sale.Expression, billingexpr.TokenParams{
+				P: 100_000, C: 10_000, Len: 100_000,
+			})
+			require.NoError(t, err)
+			require.InDelta(t, tc.want, amount/1e6, 1e-9)
+		})
+	}
+}
 
 func TestDefaultUpstreamGroupProtocol(t *testing.T) {
 	haiku := UpstreamQuote{ModelID: "claude-haiku-4-5-20251001", Kind: "token", Endpoints: []string{"anthropic"}}
