@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/glebarez/sqlite"
@@ -88,7 +89,7 @@ func TestStringQuoteModelMultipliers(t *testing.T) {
 		require.NoError(t, sqlDB.Close())
 	})
 	require.NoError(t, db.AutoMigrate(&model.UpstreamQuoteChannel{}, &model.UpstreamQuoteGroup{},
-		&model.UpstreamQuoteModel{}, &model.UpstreamQuoteVersion{}))
+		&model.UpstreamQuoteModel{}, &model.UpstreamQuoteVersion{}, &model.UpstreamSaleVersion{}, &model.Channel{}))
 	_, err = SaveUpstreamImport(imported)
 	require.NoError(t, err)
 	channels, err := ListUpstreamQuoteChannels()
@@ -97,6 +98,53 @@ func TestStringQuoteModelMultipliers(t *testing.T) {
 	require.Len(t, channels[0].Groups, 1)
 	require.Nil(t, channels[0].Groups[0].UpstreamMultiplier)
 	require.Equal(t, []float64{0.2, 1.8}, channels[0].Groups[0].UpstreamMultipliers)
+}
+
+func TestListUpstreamQuoteChannelsPublishedGroups(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	previousDB := model.DB
+	model.DB = db
+	t.Cleanup(func() {
+		model.DB = previousDB
+		require.NoError(t, sqlDB.Close())
+	})
+	require.NoError(t, db.AutoMigrate(&model.UpstreamQuoteChannel{}, &model.UpstreamQuoteGroup{},
+		&model.UpstreamQuoteModel{}, &model.UpstreamQuoteVersion{}, &model.UpstreamSaleVersion{}, &model.Channel{}))
+	channel := model.UpstreamQuoteChannel{Source: "string", Name: "String AI"}
+	require.NoError(t, db.Create(&channel).Error)
+	for index, tc := range []struct {
+		name      string
+		status    int
+		published bool
+	}{
+		{name: "enabled", status: common.ChannelStatusEnabled, published: true},
+		{name: "disabled", status: common.ChannelStatusManuallyDisabled},
+		{name: "unlisted"},
+	} {
+		group := model.UpstreamQuoteGroup{ChannelID: channel.ID, SourceGroup: tc.name, Name: tc.name, Multiplier: 1}
+		require.NoError(t, db.Create(&group).Error)
+		version := model.UpstreamSaleVersion{GroupID: group.ID}
+		if tc.status > 0 {
+			relayChannel := model.Channel{Status: tc.status}
+			require.NoError(t, db.Create(&relayChannel).Error)
+			version.ChannelID = relayChannel.Id
+		}
+		require.NoError(t, db.Create(&version).Error)
+		require.NoError(t, db.Model(&group).Update("active_version", version.ID).Error)
+		channels, err := ListUpstreamQuoteChannels()
+		require.NoError(t, err)
+		require.Len(t, channels, 1)
+		groups := channels[0].Groups
+		require.Len(t, groups, index+1)
+		require.Equal(t, tc.published, groups[index].Published, tc.name)
+		preview, err := PreviewUpstreamGroup(group.ID, nil)
+		require.NoError(t, err)
+		require.Equal(t, tc.published, preview.Published, tc.name)
+	}
 }
 
 func TestStringQuoteStoredSnapshotPricing(t *testing.T) {

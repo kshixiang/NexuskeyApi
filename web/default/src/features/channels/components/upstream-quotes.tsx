@@ -68,6 +68,7 @@ type Group = {
   credit_cost: number
   revision: number
   active_version: number
+  published: boolean
 }
 type Channel = {
   id: number
@@ -175,6 +176,11 @@ export function UpstreamQuotes() {
     queryFn: () => request<Channel[]>('get', ''),
   })
   const channels = list.data ?? []
+  const publishedGroups = channels.flatMap((channel) =>
+    (channel.groups ?? [])
+      .filter((item) => item.published)
+      .map((item) => ({ channel, group: item }))
+  )
   const active = channels.find((channel) =>
     channel.groups?.some((group) => group.id === selected)
   )
@@ -183,6 +189,10 @@ export function UpstreamQuotes() {
     queryFn: () => request<GroupDetail>('get', '/groups/' + selected),
     enabled: selected > 0,
   })
+  function selectGroup(id: number): void {
+    setSelected(id)
+    setImportMode(null)
+  }
   return (
     <div className='space-y-6'>
       <div className='grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]'>
@@ -202,6 +212,48 @@ export function UpstreamQuotes() {
             <p className='text-destructive px-2 text-sm'>
               {t('Unable to load upstream quotes')}
             </p>
+          )}
+          {list.isSuccess && (
+            <Collapsible defaultOpen className='border-t pt-2'>
+              <CollapsibleTrigger
+                render={<Button type='button' variant='ghost' />}
+                className='group w-full justify-start gap-2 px-2 text-left'
+              >
+                <span
+                  className='size-2 shrink-0 rounded-full bg-emerald-500'
+                  aria-hidden='true'
+                />
+                <span className='flex-1 font-semibold'>
+                  {t('Published groups')}
+                </span>
+                <span className='text-muted-foreground font-mono text-xs'>
+                  {publishedGroups.length}
+                </span>
+                <ChevronRight
+                  aria-hidden='true'
+                  className='transition-transform group-data-[panel-open]:rotate-90'
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent className='flex flex-col gap-1 pt-1'>
+                {publishedGroups.map((item) => (
+                  <UpstreamGroupButton
+                    key={item.group.id}
+                    group={item.group}
+                    channelName={item.channel.name}
+                    selected={selected === item.group.id && !importMode}
+                    onSelect={selectGroup}
+                  />
+                ))}
+                {publishedGroups.length === 0 && (
+                  <p className='text-muted-foreground px-2 py-2 text-xs'>
+                    {t('No published groups')}
+                  </p>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+          {channels.length > 0 && (
+            <h2 className='px-2 pt-2 text-sm font-semibold'>{t('Channels')}</h2>
           )}
           {channels.map((channel) => (
             <Collapsible
@@ -229,41 +281,12 @@ export function UpstreamQuotes() {
               </CollapsibleTrigger>
               <CollapsibleContent className='flex flex-col gap-1'>
                 {channel.groups?.map((item) => (
-                  <Button
+                  <UpstreamGroupButton
                     key={item.id}
-                    variant={
-                      selected === item.id && !importMode
-                        ? 'secondary'
-                        : 'ghost'
-                    }
-                    className='w-full justify-start'
-                    title={item.name}
-                    onClick={() => {
-                      setSelected(item.id)
-                      setImportMode(null)
-                    }}
-                  >
-                    <ChevronRight className='size-3 shrink-0' />
-                    <span className='min-w-0 flex-1 truncate text-left'>
-                      {item.name}
-                    </span>
-                    <span
-                      className='shrink-0 font-mono text-xs text-yellow-600 tabular-nums dark:text-yellow-400'
-                      title={
-                        t('Upstream multiplier') +
-                        ' · ' +
-                        formatUpstreamMultipliers(
-                          item.upstream_multiplier,
-                          item.upstream_multipliers ?? []
-                        )
-                      }
-                    >
-                      {formatGroupUpstreamMultiplier(item)}
-                    </span>
-                    {item.active_version > 0 && (
-                      <span className='ml-auto size-2 shrink-0 rounded-full bg-emerald-500' />
-                    )}
-                  </Button>
+                    group={item}
+                    selected={selected === item.id && !importMode}
+                    onSelect={selectGroup}
+                  />
                 ))}
               </CollapsibleContent>
             </Collapsible>
@@ -302,6 +325,53 @@ export function UpstreamQuotes() {
       </div>
       <QuoteComparison />
     </div>
+  )
+}
+
+function UpstreamGroupButton(props: {
+  group: Group
+  channelName?: string
+  selected: boolean
+  onSelect: (id: number) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Button
+      type='button'
+      variant={props.selected ? 'secondary' : 'ghost'}
+      className='h-auto min-h-8 w-full justify-start py-1.5'
+      title={[props.channelName, props.group.name].filter(Boolean).join(' · ')}
+      onClick={() => props.onSelect(props.group.id)}
+    >
+      <ChevronRight className='size-3 shrink-0' aria-hidden='true' />
+      <span className='flex min-w-0 flex-1 flex-col text-left'>
+        <span className='truncate'>{props.group.name}</span>
+        {props.channelName && (
+          <span className='text-muted-foreground truncate text-xs font-normal'>
+            {props.channelName}
+          </span>
+        )}
+      </span>
+      <span
+        className='shrink-0 font-mono text-xs text-yellow-600 tabular-nums dark:text-yellow-400'
+        title={
+          t('Upstream multiplier') +
+          ' · ' +
+          formatUpstreamMultipliers(
+            props.group.upstream_multiplier,
+            props.group.upstream_multipliers ?? []
+          )
+        }
+      >
+        {formatGroupUpstreamMultiplier(props.group)}
+      </span>
+      {props.group.published && (
+        <span
+          className='ml-auto size-2 shrink-0 rounded-full bg-emerald-500'
+          aria-hidden='true'
+        />
+      )}
+    </Button>
   )
 }
 
@@ -926,12 +996,12 @@ function GroupSettings({
   const listingError = isAxiosError<Envelope<unknown>>(listing.error)
     ? listing.error.response?.data?.message || listing.error.message
     : listing.error?.message
-  const state =
-    group.active_version > 0
-      ? 'Published'
-      : group.key_hint && group.base_url
-        ? 'Ready to publish'
-        : 'Needs configuration'
+  let state = 'Needs configuration'
+  if (group.published) {
+    state = 'Published'
+  } else if (group.key_hint && group.base_url) {
+    state = 'Ready to publish'
+  }
   return (
     <div className='space-y-4 rounded-xl border p-4'>
       <div className='flex flex-wrap items-center justify-between gap-2'>
@@ -1106,11 +1176,11 @@ function GroupSettings({
         >
           {historic
             ? t('Publish historical version')
-            : group.active_version
+            : group.published
               ? t('Update published group')
               : t('Publish group')}
         </Button>
-        {group.active_version > 0 && (
+        {group.published && (
           <Button
             variant='outline'
             disabled={busy}

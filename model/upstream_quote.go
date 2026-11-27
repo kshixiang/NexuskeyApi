@@ -36,6 +36,7 @@ type UpstreamQuoteGroup struct {
 	CreditCost          float64   `json:"credit_cost"`
 	Revision            int       `json:"revision"`
 	ActiveVersion       int       `json:"active_version"`
+	Published           bool      `json:"published" gorm:"-"`
 }
 
 type UpstreamQuoteModel struct {

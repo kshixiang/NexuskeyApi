@@ -428,6 +428,13 @@ func ConfirmUpstreamModelQuotes(groupID, revision int) error {
 	})
 }
 
+func publishedUpstreamQuoteGroups(tx *gorm.DB) *gorm.DB {
+	return tx.Table("upstream_quote_groups AS grp").
+		Joins("JOIN upstream_sale_versions AS ver ON ver.id = grp.active_version").
+		Joins("JOIN channels AS ch ON ch.id = ver.channel_id").
+		Where("ch.status = ?", common.ChannelStatusEnabled)
+}
+
 func ListUpstreamQuoteChannels() ([]UpstreamChannelView, error) {
 	var channels []model.UpstreamQuoteChannel
 	if err := model.DB.Order("id").Find(&channels).Error; err != nil {
@@ -435,6 +442,10 @@ func ListUpstreamQuoteChannels() ([]UpstreamChannelView, error) {
 	}
 	var groups []model.UpstreamQuoteGroup
 	if err := model.DB.Omit("api_key").Order("id").Find(&groups).Error; err != nil {
+		return nil, err
+	}
+	var publishedIDs []int
+	if err := publishedUpstreamQuoteGroups(model.DB).Pluck("grp.id", &publishedIDs).Error; err != nil {
 		return nil, err
 	}
 	var rows []struct {
@@ -467,6 +478,7 @@ func ListUpstreamQuoteChannels() ([]UpstreamChannelView, error) {
 	}
 	byChannel := make(map[int][]model.UpstreamQuoteGroup)
 	for _, group := range groups {
+		group.Published = slices.Contains(publishedIDs, group.ID)
 		group.UpstreamMultiplier = multipliers[group.ID].common()
 		group.UpstreamMultipliers = modelMultipliers[group.ID]
 		slices.Sort(group.UpstreamMultipliers)
@@ -568,6 +580,13 @@ func previewUpstreamGroup(tx *gorm.DB, id int, multiplier *float64) (UpstreamGro
 	var preview UpstreamGroupPreview
 	if err := tx.First(&preview.UpstreamQuoteGroup, id).Error; err != nil {
 		return preview, err
+	}
+	if preview.ActiveVersion > 0 {
+		var count int64
+		if err := publishedUpstreamQuoteGroups(tx).Where("grp.id = ?", id).Count(&count).Error; err != nil {
+			return preview, err
+		}
+		preview.Published = count > 0
 	}
 	if preview.APIKey != "" {
 		preview.KeyHint = "••••"
