@@ -11,11 +11,18 @@ import (
 )
 
 type UpstreamQuoteChannel struct {
-	ID        int    `json:"id"`
-	Source    string `json:"source" gorm:"size:32;uniqueIndex;not null"`
-	Name      string `json:"name"`
-	SourceURL string `json:"source_url"`
-	Imported  int64  `json:"imported_at"`
+	ID                   int    `json:"id"`
+	Source               string `json:"source" gorm:"size:32;uniqueIndex;not null"`
+	Name                 string `json:"name"`
+	SourceURL            string `json:"source_url"`
+	Imported             int64  `json:"imported_at"`
+	UpstreamQuoteBalance `gorm:"embedded"`
+}
+
+type UpstreamQuoteBalance struct {
+	Balance          *float64 `json:"balance,omitempty"`
+	BalanceCurrency  string   `json:"balance_currency,omitempty"`
+	BalanceUpdatedAt int64    `json:"balance_updated_at,omitempty"`
 }
 
 type UpstreamQuoteGroup struct {

@@ -7,7 +7,14 @@ import {
 } from 'react'
 import { isAxiosError } from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Download, FileUp, Layers, Plus } from 'lucide-react'
+import {
+  ChevronRight,
+  Download,
+  FileUp,
+  Layers,
+  Plus,
+  RefreshCw,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
@@ -77,7 +84,12 @@ type Group = {
   published: boolean
   published_multipliers?: number[]
 }
-type Channel = {
+type ChannelBalance = {
+  balance: number
+  balance_currency: string
+  balance_updated_at: number
+}
+type Channel = Partial<ChannelBalance> & {
   id: number
   source: string
   name: string
@@ -205,7 +217,7 @@ export function UpstreamQuotes() {
   }
   return (
     <div className='space-y-6'>
-      <div className='grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]'>
+      <div className='grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]'>
         <aside className='space-y-3 rounded-xl border p-3'>
           <Button
             className='w-full justify-start'
@@ -272,24 +284,31 @@ export function UpstreamQuotes() {
               defaultOpen
               className='space-y-1 border-t pt-2'
             >
-              <CollapsibleTrigger
-                render={<Button type='button' variant='ghost' />}
-                className='group w-full justify-start gap-2 px-2 text-left'
-                title={channel.name}
-              >
-                <Layers data-icon='inline-start' aria-hidden='true' />
-                <span className='min-w-0 flex-1 truncate text-sm font-semibold'>
-                  {channel.name}
-                </span>
-                <span className='text-muted-foreground font-mono text-xs'>
-                  #{channel.id}
-                </span>
-                <ChevronRight
-                  data-icon='inline-end'
-                  aria-hidden='true'
-                  className='transition-transform group-data-[panel-open]:rotate-90'
-                />
-              </CollapsibleTrigger>
+              <div className='isolate grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1'>
+                <CollapsibleTrigger
+                  render={<Button type='button' variant='ghost' />}
+                  className='group col-span-full row-start-1 grid min-w-0 grid-cols-subgrid gap-1 px-2 text-left'
+                  title={channel.name}
+                >
+                  <span className='flex min-w-0 items-center gap-2'>
+                    <Layers data-icon='inline-start' aria-hidden='true' />
+                    <span className='truncate font-semibold'>
+                      {channel.name}
+                    </span>
+                  </span>
+                  <span className='col-start-3 flex items-center gap-2'>
+                    <span className='text-muted-foreground font-mono text-xs'>
+                      #{channel.id}
+                    </span>
+                    <ChevronRight
+                      data-icon='inline-end'
+                      aria-hidden='true'
+                      className='transition-transform group-data-[panel-open]:rotate-90'
+                    />
+                  </span>
+                </CollapsibleTrigger>
+                <UpstreamChannelBalance channel={channel} />
+              </div>
               <CollapsibleContent className='flex flex-col gap-1'>
                 {channel.groups?.map((item) => (
                   <UpstreamGroupButton
@@ -335,6 +354,79 @@ export function UpstreamQuotes() {
         </section>
       </div>
       <QuoteComparison />
+    </div>
+  )
+}
+
+function UpstreamChannelBalance({ channel }: { channel: Channel }) {
+  const { t, i18n } = useTranslation()
+  const queryClient = useQueryClient()
+  const sync = useMutation({
+    mutationFn: () =>
+      request<ChannelBalance>(
+        'post',
+        `/channels/${channel.id}/balance`,
+        undefined,
+        { skipBusinessError: true }
+      ),
+    onSuccess: async (balance) => {
+      queryClient.setQueryData<Channel[]>(channelsKey, (channels) =>
+        channels?.map((item) =>
+          item.id === channel.id &&
+          (item.balance_updated_at ?? 0) <= balance.balance_updated_at
+            ? { ...item, ...balance }
+            : item
+        )
+      )
+      await queryClient.invalidateQueries({ queryKey: channelsKey })
+    },
+    onError: (error) => {
+      if (isAxiosError(error)) return
+      switch (error.message) {
+        case 'Save an upstream API key before syncing the balance.':
+          toast.error(t('Save an upstream API key before syncing the balance.'))
+          break
+        case 'Upstream wallet balance unavailable':
+          toast.error(t('Upstream wallet balance unavailable'))
+          break
+        default:
+          toast.error(t('Failed to update balance'))
+      }
+    },
+  })
+  const updateLabel = `${t('Update Balance')} · ${channel.name}`
+  const amount =
+    channel.balance === undefined
+      ? '—'
+      : `${new Intl.NumberFormat(i18n.resolvedLanguage, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(channel.balance)} ${channel.balance_currency}`
+
+  return (
+    <div className='pointer-events-none z-10 col-start-2 row-start-1 flex items-center gap-0.5'>
+      <Button
+        type='button'
+        variant='ghost'
+        size='icon-xs'
+        className='text-muted-foreground pointer-events-auto'
+        aria-label={updateLabel}
+        title={updateLabel}
+        disabled={sync.isPending}
+        onClick={() => sync.mutate()}
+      >
+        <RefreshCw
+          aria-hidden='true'
+          className={sync.isPending ? 'motion-safe:animate-spin' : undefined}
+        />
+      </Button>
+      <span
+        className='text-muted-foreground text-xs whitespace-nowrap'
+        aria-live='polite'
+      >
+        {t('Balance')}{' '}
+        <span className='text-success tabular-nums'>{amount}</span>
+      </span>
     </div>
   )
 }

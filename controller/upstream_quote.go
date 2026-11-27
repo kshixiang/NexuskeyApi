@@ -40,6 +40,13 @@ func ListUpstreamQuoteChannels(c *gin.Context) {
 	upstreamQuoteResult(c, channels, err)
 }
 
+func SyncUpstreamQuoteChannelBalance(c *gin.Context) {
+	if id := upstreamQuoteID(c); id > 0 {
+		balance, err := service.SyncUpstreamQuoteChannelBalance(c.Request.Context(), id)
+		upstreamQuoteResult(c, balance, err)
+	}
+}
+
 func ImportUpstreamQuotes(c *gin.Context) {
 	var input struct {
 		service.UpstreamImport

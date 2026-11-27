@@ -244,6 +244,7 @@ func SetApiRouter(router *gin.Engine) {
 		upstreamQuoteRoute.POST("/import/:action", controller.ImportUpstreamQuotes)
 		upstreamQuoteRoute.GET("/source/:source", controller.LoadUpstreamQuoteSnapshot)
 		upstreamQuoteRoute.PUT("/channels/:id", controller.RenameUpstreamQuoteChannel)
+		upstreamQuoteRoute.POST("/channels/:id/balance", controller.SyncUpstreamQuoteChannelBalance)
 		upstreamQuoteRoute.GET("/groups/:id", controller.GetUpstreamQuoteGroup)
 		upstreamQuoteRoute.PUT("/groups/:id", controller.SaveUpstreamQuoteGroup)
 		upstreamQuoteRoute.POST("/groups/:id/test", controller.TestUpstreamQuoteGroupModel)
