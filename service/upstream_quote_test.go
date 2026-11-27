@@ -75,6 +75,28 @@ func TestStringQuoteModelMultipliers(t *testing.T) {
 	require.Len(t, quotes[0].Tiers, 1)
 	require.NotNil(t, quotes[0].Tiers[0].Input)
 	require.Equal(t, 1.6, *quotes[0].Tiers[0].Input)
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	previousDB := model.DB
+	model.DB = db
+	t.Cleanup(func() {
+		model.DB = previousDB
+		require.NoError(t, sqlDB.Close())
+	})
+	require.NoError(t, db.AutoMigrate(&model.UpstreamQuoteChannel{}, &model.UpstreamQuoteGroup{},
+		&model.UpstreamQuoteModel{}, &model.UpstreamQuoteVersion{}))
+	_, err = SaveUpstreamImport(imported)
+	require.NoError(t, err)
+	channels, err := ListUpstreamQuoteChannels()
+	require.NoError(t, err)
+	require.Len(t, channels, 1)
+	require.Len(t, channels[0].Groups, 1)
+	require.Nil(t, channels[0].Groups[0].UpstreamMultiplier)
+	require.Equal(t, []float64{0.2, 1.8}, channels[0].Groups[0].UpstreamMultipliers)
 }
 
 func TestStringQuoteStoredSnapshotPricing(t *testing.T) {

@@ -63,6 +63,7 @@ type Group = {
   protocol: string
   multiplier: number
   upstream_multiplier?: number
+  upstream_multipliers?: number[]
   final_multiplier?: number
   credit_cost: number
   revision: number
@@ -248,11 +249,16 @@ export function UpstreamQuotes() {
                     </span>
                     <span
                       className='shrink-0 font-mono text-xs text-yellow-600 tabular-nums dark:text-yellow-400'
-                      title={t('Upstream multiplier')}
+                      title={
+                        t('Upstream multiplier') +
+                        ' · ' +
+                        formatUpstreamMultipliers(
+                          item.upstream_multiplier,
+                          item.upstream_multipliers ?? []
+                        )
+                      }
                     >
-                      {item.upstream_multiplier == null
-                        ? '—'
-                        : formatQuoteMultiplier(item.upstream_multiplier)}
+                      {formatGroupUpstreamMultiplier(item)}
                     </span>
                     {item.active_version > 0 && (
                       <span className='ml-auto size-2 shrink-0 rounded-full bg-emerald-500' />
@@ -736,6 +742,18 @@ function formatQuoteMultiplier(value: number) {
       value
     ) + '×'
   )
+}
+
+function formatGroupUpstreamMultiplier(group: Group): string {
+  if (group.upstream_multiplier != null) {
+    return formatQuoteMultiplier(group.upstream_multiplier)
+  }
+  const rates = group.upstream_multipliers ?? []
+  if (rates.length === 0) return '—'
+  const min = Math.min(...rates)
+  const max = Math.max(...rates)
+  if (min === max) return formatQuoteMultiplier(min)
+  return `${formatQuoteMultiplier(min)}–${formatQuoteMultiplier(max)}`
 }
 
 function formatUpstreamMultipliers(

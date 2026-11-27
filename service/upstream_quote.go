@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -450,19 +451,25 @@ func ListUpstreamQuoteChannels() ([]UpstreamChannelView, error) {
 		}
 	}
 	multipliers := make(map[int]upstreamGroupMultipliers)
+	modelMultipliers := make(map[int][]float64)
 	for _, row := range rows {
 		var quote UpstreamQuote
 		if err := common.UnmarshalJsonStr(row.Snapshot, &quote); err != nil {
 			return nil, err
 		}
-		rate, _ := upstreamQuoteMultipliers(quote)
+		rate, applied := upstreamQuoteMultipliers(quote)
 		groupRates := multipliers[row.GroupID]
 		groupRates.add(rate, row.LastSeenImport)
 		multipliers[row.GroupID] = groupRates
+		if applied != nil && validUpstreamAmount(*applied) && !slices.Contains(modelMultipliers[row.GroupID], *applied) {
+			modelMultipliers[row.GroupID] = append(modelMultipliers[row.GroupID], *applied)
+		}
 	}
 	byChannel := make(map[int][]model.UpstreamQuoteGroup)
 	for _, group := range groups {
 		group.UpstreamMultiplier = multipliers[group.ID].common()
+		group.UpstreamMultipliers = modelMultipliers[group.ID]
+		slices.Sort(group.UpstreamMultipliers)
 		byChannel[group.ChannelID] = append(byChannel[group.ChannelID], group)
 	}
 	result := make([]UpstreamChannelView, 0, len(channels))
