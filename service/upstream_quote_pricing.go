@@ -289,8 +289,9 @@ func multiplyUpstreamAmount(price, factor float64) float64 {
 // snapshot, including snapshots saved before final multipliers were supported.
 func upstreamQuoteMultipliers(quote UpstreamQuote) (group, applied *float64) {
 	var source struct {
-		Group *float64 `json:"group_multiplier"`
-		Model struct {
+		Group   *float64 `json:"group_multiplier"`
+		Applied *float64 `json:"applied_multiplier"`
+		Model   struct {
 			Rate *float64 `json:"rate_multiplier"`
 		} `json:"model"`
 		Row struct {
@@ -299,6 +300,9 @@ func upstreamQuoteMultipliers(quote UpstreamQuote) (group, applied *float64) {
 	}
 	if len(quote.Reference) == 0 || common.Unmarshal(quote.Reference, &source) != nil {
 		return nil, nil
+	}
+	if source.Applied != nil {
+		return source.Group, source.Applied
 	}
 	if source.Model.Rate != nil {
 		return source.Group, source.Model.Rate

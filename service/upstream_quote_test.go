@@ -10,6 +10,49 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestGeek2APIQuoteSnapshot(t *testing.T) {
+	snapshot := []byte(`{"code":0,"data":[
+		{"platform":"openai","groups":[{"id":24,"name":"Shared","rate_multiplier":0.6}],"models":[
+			{"name":"gpt-model","pricing":{"billing_mode":"token","input_price":5,"output_price":0,"cache_read_price":0.5}},
+			{"name":"gpt-model","pricing":{"billing_mode":"token","input_price":5,"output_price":0,"cache_read_price":0.5}}
+		]},
+		{"platform":"gemini","groups":[{"id":24,"name":"Shared","rate_multiplier":0.6}],"models":[
+			{"name":"gemini-model","pricing":{"billing_mode":"token","input_price":2,"output_price":12,"is_final_price":true}},
+			{"name":"unpriced","pricing":null}
+		]},
+		{"platform":"deepseek","groups":[{"id":98,"name":"DeepSeek","rate_multiplier":0.7}],"models":[
+			{"name":"deepseek-model","pricing":{"billing_mode":"token","input_price":1,"output_price":4,"time_pricing":{
+				"timezone":"UTC","peak_pricing_weekly_windows":{"1":[{"start":"09:00","end":"12:00"}],"7":[{"start":"09:00","end":"12:00"}]},
+				"off_peak":{"input_price":1,"output_price":4,"cache_write_price":0},
+				"peak":{"input_price":2,"output_price":8,"cache_write_price":0}
+			}}}
+		]}
+	]}`)
+	imported, err := ParseUpstreamQuoteSnapshot("geek2api", snapshot)
+	require.NoError(t, err)
+	require.Len(t, imported.Groups, 2)
+	shared := imported.Groups[0]
+	require.Equal(t, "24", shared.SourceID)
+	require.Len(t, shared.Quotes, 3)
+	require.Equal(t, 3.0, *shared.Quotes[0].Tiers[0].Input)
+	require.Equal(t, 0.0, *shared.Quotes[0].Tiers[0].Output)
+	require.Equal(t, 0.3, *shared.Quotes[0].Tiers[0].CacheRead)
+	require.Equal(t, 2.0, *shared.Quotes[1].Tiers[0].Input)
+	groupRate, appliedRate := upstreamQuoteMultipliers(shared.Quotes[1])
+	require.Equal(t, 0.6, *groupRate)
+	require.Equal(t, 1.0, *appliedRate)
+	require.Equal(t, "unknown", shared.Quotes[2].Kind)
+	require.False(t, shared.Quotes[0].Confirmed)
+
+	tiers := imported.Groups[1].Quotes[0].Tiers
+	require.Len(t, tiers, 2)
+	require.Equal(t, &UpstreamWindow{Timezone: "UTC", Start: 540, End: 720, Weekdays: []int{1, 0}}, tiers[0].Window)
+	require.Equal(t, 1.4, *tiers[0].Input)
+	require.Equal(t, 0.0, *tiers[0].CacheWrite)
+	require.Nil(t, tiers[1].Window)
+	require.Equal(t, 0.7, *tiers[1].Input)
+}
+
 func TestStringQuoteModelMultipliers(t *testing.T) {
 	snapshot := []byte(`{"code":0,"data":{"model_pricing_sections":[{"source_name":"OpenAI","rows":[
 		{"models":["gpt-astra"],"billing_mode":"token","price_multiplier":0.2,"effective_input_usd_per_mtok":1.6},

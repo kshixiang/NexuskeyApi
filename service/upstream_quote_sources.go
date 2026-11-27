@@ -20,18 +20,27 @@ type upstreamCatalog struct {
 }
 
 func FetchUpstreamQuoteSnapshot(ctx context.Context, source string) (UpstreamImport, error) {
-	var endpoint string
+	var endpoint, token string
 	switch source {
 	case "kedaya":
 		endpoint = "https://kedaya.ai/api/v1/model-plaza"
 	case "string":
 		endpoint = "https://www.string.ink/api/v1/public/pricing"
+	case "geek2api":
+		endpoint = "https://www.geek2api.com/api/v1/model-plaza"
+		token = strings.TrimSpace(common.GetEnvOrDefaultString("GEEK2API_QUOTE_BEARER_TOKEN", ""))
+		if token == "" {
+			return UpstreamImport{}, errors.New("Geek2API requires GEEK2API_QUOTE_BEARER_TOKEN to fetch quotes; you can also upload or paste a JSON snapshot")
+		}
 	default:
 		return UpstreamImport{}, errors.New("unknown upstream quote source")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return UpstreamImport{}, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	client := http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -69,6 +78,8 @@ func ParseUpstreamQuoteSnapshot(source string, raw []byte) (UpstreamImport, erro
 		result.Groups, err = parseKedayaQuotes(envelope.Data)
 	case "string":
 		result.Groups, err = parseStringQuotes(envelope.Data)
+	case "geek2api":
+		result.Groups, err = parseGeek2APIQuotes(envelope.Data)
 	default:
 		err = errors.New("unknown upstream quote source")
 	}

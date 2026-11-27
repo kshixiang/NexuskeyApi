@@ -89,6 +89,8 @@ func upstreamSource(source string) (name, page, domain string) {
 		return "Kedaya", "https://kedaya.ai/model-plaza?embedded=1", "kedaya.ai"
 	case "string":
 		return "String AI", "https://www.string.ink/dashboard/pricing", "string.ink"
+	case "geek2api":
+		return "Geek2API", "https://www.geek2api.com/model-plaza", "geek2api.com"
 	}
 	return "", "", ""
 }
@@ -111,8 +113,11 @@ func validUpstreamModel(name string) bool {
 }
 
 func ValidateUpstreamImport(input UpstreamImport) error {
-	if name, _, _ := upstreamSource(input.Source); name == "" || len(input.Groups) == 0 {
-		return errors.New("select Kedaya or String and include at least one group")
+	if name, _, _ := upstreamSource(input.Source); name == "" {
+		return errors.New("unknown upstream quote source")
+	}
+	if len(input.Groups) == 0 {
+		return errors.New("include at least one upstream quote group")
 	}
 	groups := make(map[string]bool)
 	for _, group := range input.Groups {

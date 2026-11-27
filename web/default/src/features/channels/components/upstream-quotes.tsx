@@ -440,6 +440,7 @@ function ImportQuotes({
         >
           <option value='kedaya'>Kedaya</option>
           <option value='string'>String AI</option>
+          <option value='geek2api'>Geek2API</option>
         </select>
         <Button
           type='button'
