@@ -444,9 +444,37 @@ func ListUpstreamQuoteChannels() ([]UpstreamChannelView, error) {
 	if err := model.DB.Omit("api_key").Order("id").Find(&groups).Error; err != nil {
 		return nil, err
 	}
-	var publishedIDs []int
-	if err := publishedUpstreamQuoteGroups(model.DB).Pluck("grp.id", &publishedIDs).Error; err != nil {
+	var publishedRows []struct {
+		GroupID         int
+		Markup          float64
+		FinalMultiplier *float64
+		Snapshot        string
+	}
+	if err := publishedUpstreamQuoteGroups(model.DB).
+		Select("grp.id AS group_id, ver.markup, ver.final_multiplier, quote.snapshot").
+		Joins("LEFT JOIN upstream_sale_models AS sale ON sale.version_id = ver.id").
+		Joins("LEFT JOIN upstream_quote_versions AS quote ON quote.id = sale.quote_version").
+		Scan(&publishedRows).Error; err != nil {
 		return nil, err
+	}
+	publishedMultipliers := make(map[int][]float64)
+	for _, row := range publishedRows {
+		rate := row.Markup
+		if row.FinalMultiplier != nil {
+			rate = *row.FinalMultiplier
+		} else if row.Snapshot != "" {
+			var quote UpstreamQuote
+			if err := common.UnmarshalJsonStr(row.Snapshot, &quote); err != nil {
+				return nil, err
+			}
+			_, applied := upstreamQuoteMultipliers(quote)
+			if applied != nil {
+				rate = multiplyUpstreamAmount(rate, *applied)
+			}
+		}
+		if !slices.Contains(publishedMultipliers[row.GroupID], rate) {
+			publishedMultipliers[row.GroupID] = append(publishedMultipliers[row.GroupID], rate)
+		}
 	}
 	var rows []struct {
 		GroupID        int
@@ -478,7 +506,8 @@ func ListUpstreamQuoteChannels() ([]UpstreamChannelView, error) {
 	}
 	byChannel := make(map[int][]model.UpstreamQuoteGroup)
 	for _, group := range groups {
-		group.Published = slices.Contains(publishedIDs, group.ID)
+		group.PublishedMultipliers, group.Published = publishedMultipliers[group.ID]
+		slices.Sort(group.PublishedMultipliers)
 		group.UpstreamMultiplier = multipliers[group.ID].common()
 		group.UpstreamMultipliers = modelMultipliers[group.ID]
 		slices.Sort(group.UpstreamMultipliers)

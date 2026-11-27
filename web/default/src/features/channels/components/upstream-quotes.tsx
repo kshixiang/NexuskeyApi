@@ -69,6 +69,7 @@ type Group = {
   revision: number
   active_version: number
   published: boolean
+  published_multipliers?: number[]
 }
 type Channel = {
   id: number
@@ -239,7 +240,8 @@ export function UpstreamQuotes() {
                   <UpstreamGroupButton
                     key={item.group.id}
                     group={item.group}
-                    channelName={item.channel.name}
+                    channelId={item.channel.id}
+                    showPublishedPrice
                     selected={selected === item.group.id && !importMode}
                     onSelect={selectGroup}
                   />
@@ -330,40 +332,55 @@ export function UpstreamQuotes() {
 
 function UpstreamGroupButton(props: {
   group: Group
-  channelName?: string
+  channelId?: number
+  showPublishedPrice?: boolean
   selected: boolean
   onSelect: (id: number) => void
 }) {
   const { t } = useTranslation()
+  let multiplier = formatGroupUpstreamMultiplier(props.group)
+  let multiplierTitle =
+    t('Upstream multiplier') +
+    ' · ' +
+    formatUpstreamMultipliers(
+      props.group.upstream_multiplier,
+      props.group.upstream_multipliers ?? []
+    )
+  if (props.showPublishedPrice) {
+    const rates = props.group.published_multipliers ?? []
+    multiplier = formatMultiplierRange(rates)
+    multiplierTitle =
+      t('Final sales multiplier') +
+      ' · ' +
+      (rates.map(formatQuoteMultiplier).join(' / ') || '—')
+  }
   return (
     <Button
       type='button'
       variant={props.selected ? 'secondary' : 'ghost'}
       className='h-auto min-h-8 w-full justify-start py-1.5'
-      title={[props.channelName, props.group.name].filter(Boolean).join(' · ')}
+      title={[
+        props.channelId != null ? `#${props.channelId}` : '',
+        props.group.name,
+      ]
+        .filter(Boolean)
+        .join(' · ')}
       onClick={() => props.onSelect(props.group.id)}
     >
       <ChevronRight className='size-3 shrink-0' aria-hidden='true' />
       <span className='flex min-w-0 flex-1 flex-col text-left'>
         <span className='truncate'>{props.group.name}</span>
-        {props.channelName && (
+        {props.channelId != null && (
           <span className='text-muted-foreground truncate text-xs font-normal'>
-            {props.channelName}
+            #{props.channelId}
           </span>
         )}
       </span>
       <span
         className='shrink-0 font-mono text-xs text-yellow-600 tabular-nums dark:text-yellow-400'
-        title={
-          t('Upstream multiplier') +
-          ' · ' +
-          formatUpstreamMultipliers(
-            props.group.upstream_multiplier,
-            props.group.upstream_multipliers ?? []
-          )
-        }
+        title={multiplierTitle}
       >
-        {formatGroupUpstreamMultiplier(props.group)}
+        {multiplier}
       </span>
       {props.group.published && (
         <span
@@ -818,7 +835,10 @@ function formatGroupUpstreamMultiplier(group: Group): string {
   if (group.upstream_multiplier != null) {
     return formatQuoteMultiplier(group.upstream_multiplier)
   }
-  const rates = group.upstream_multipliers ?? []
+  return formatMultiplierRange(group.upstream_multipliers ?? [])
+}
+
+function formatMultiplierRange(rates: number[]): string {
   if (rates.length === 0) return '—'
   const min = Math.min(...rates)
   const max = Math.max(...rates)
