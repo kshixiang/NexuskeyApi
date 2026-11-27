@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import { resolveModelProvider } from '@/lib/model-provider'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
@@ -57,6 +58,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { DateTimePicker } from '@/components/datetime-picker'
 import { MultiSelect } from '@/components/multi-select'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
+import type { PricingModel, PricingVendor } from '@/features/pricing/types'
 import { createApiKey, updateApiKey, getApiKey } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
@@ -80,6 +82,28 @@ type ApiKeysMutateFormProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   currentRow?: ApiKey
+}
+
+function getInferredVendor(model: PricingModel): PricingVendor | null {
+  const provider = resolveModelProvider(model.model_name)
+  if (!provider) return null
+
+  return {
+    id: -1,
+    name: provider.label === 'Claude' ? 'Anthropic' : provider.label,
+    icon: provider.icon,
+  }
+}
+
+function modelMatchesVendor(model: PricingModel, vendor: PricingVendor) {
+  if (model.vendor_name === vendor.name) return true
+
+  const inferredVendor = getInferredVendor(model)
+  return Boolean(
+    inferredVendor &&
+    (inferredVendor.name === vendor.name ||
+      (inferredVendor.icon && inferredVendor.icon === vendor.icon))
+  )
 }
 
 export function ApiKeysMutateForm({
@@ -118,12 +142,31 @@ export function ApiKeysMutateForm({
 
   const models = modelsData?.data || []
   const vendorOptions = useMemo(() => {
-    const vendorNames = new Set(
-      pricingModels
-        .map((model) => model.vendor_name)
-        .filter((name): name is string => Boolean(name))
+    const options = pricingVendors.filter((vendor) =>
+      pricingModels.some((model) => modelMatchesVendor(model, vendor))
     )
-    return pricingVendors.filter((vendor) => vendorNames.has(vendor.name))
+    const knownVendors = new Set(
+      options.flatMap((vendor) => [vendor.name, vendor.icon])
+    )
+
+    for (const model of pricingModels) {
+      const inferredVendor = getInferredVendor(model)
+      if (!inferredVendor) continue
+      if (
+        knownVendors.has(inferredVendor.name) ||
+        knownVendors.has(inferredVendor.icon)
+      ) {
+        continue
+      }
+      options.push({
+        ...inferredVendor,
+        id: -(options.length + 1),
+      })
+      knownVendors.add(inferredVendor.name)
+      knownVendors.add(inferredVendor.icon)
+    }
+
+    return options
   }, [pricingModels, pricingVendors])
   const groupsRaw = groupsData?.success ? groupsData.data || {} : {}
   const groups: ApiKeyGroupOption[] = Object.entries(groupsRaw).map(
@@ -251,8 +294,15 @@ export function ApiKeysMutateForm({
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroup = form.watch('group')
+  const selectedVendorOption = vendorOptions.find(
+    (vendor) => vendor.name === selectedVendor
+  )
   const selectedVendorModels = selectedVendor
-    ? pricingModels.filter((model) => model.vendor_name === selectedVendor)
+    ? pricingModels.filter((model) =>
+        selectedVendorOption
+          ? modelMatchesVendor(model, selectedVendorOption)
+          : false
+      )
     : pricingModels
   const vendorHasAllGroups = selectedVendorModels.some((model) =>
     model.enable_groups?.includes('all')
@@ -271,8 +321,9 @@ export function ApiKeysMutateForm({
 
   const handleVendorChange = (vendor: string) => {
     setSelectedVendor(vendor)
-    const nextVendorModels = vendor
-      ? pricingModels.filter((model) => model.vendor_name === vendor)
+    const nextVendor = vendorOptions.find((option) => option.name === vendor)
+    const nextVendorModels = nextVendor
+      ? pricingModels.filter((model) => modelMatchesVendor(model, nextVendor))
       : pricingModels
     const nextVendorHasAllGroups = nextVendorModels.some((model) =>
       model.enable_groups?.includes('all')
