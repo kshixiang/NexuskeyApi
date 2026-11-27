@@ -3734,6 +3734,7 @@
     "Test Latency": "Test Latency",
     "Test Mode": "Test Mode",
     "Test Model": "Test Model",
+    "Test selected models": "Test selected models",
     "Save the upstream API key and base URL before testing.": "Save the upstream API key and base URL before testing.",
     "This model has no supported test endpoint for the group's API protocol.": "This model has no supported test endpoint for the group's API protocol.",
     "Uses the group's saved upstream settings.": "Uses the group's saved upstream settings.",

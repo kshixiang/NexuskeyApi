@@ -3725,6 +3725,7 @@
     "Test Latency": "レイテンシをテスト",
     "Test Mode": "テストモード",
     "Test Model": "モデルをテスト",
+    "Test selected models": "選択したモデルをテスト",
     "Save the upstream API key and base URL before testing.": "テストする前に、上流 API キーとベース URL を保存してください。",
     "This model has no supported test endpoint for the group's API protocol.": "このグループの API プロトコルには、このモデルをテストできるエンドポイントがありません。",
     "Uses the group's saved upstream settings.": "このグループに保存された上流設定を使用します。",

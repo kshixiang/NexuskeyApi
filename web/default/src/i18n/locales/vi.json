@@ -3725,6 +3725,7 @@
     "Test Latency": "Kiểm tra độ trễ",
     "Test Mode": "Chế độ thử nghiệm",
     "Test Model": "Kiểm tra Mô hình",
+    "Test selected models": "Kiểm tra các mô hình đã chọn",
     "Save the upstream API key and base URL before testing.": "Hãy lưu khóa API và URL cơ sở của nhà cung cấp trước khi kiểm tra.",
     "This model has no supported test endpoint for the group's API protocol.": "Giao thức API của nhóm không có điểm cuối nào hỗ trợ kiểm tra mô hình này.",
     "Uses the group's saved upstream settings.": "Sử dụng cấu hình nhà cung cấp đã lưu của nhóm.",

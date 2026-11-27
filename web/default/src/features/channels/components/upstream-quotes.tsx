@@ -1,4 +1,10 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
 import { isAxiosError } from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Download, FileUp, Layers, Plus } from 'lucide-react'
@@ -26,7 +32,6 @@ import {
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Table,
   TableBody,
@@ -159,7 +164,7 @@ async function request<T>(
   method: 'get' | 'post' | 'put',
   path: string,
   data?: unknown,
-  options?: { skipBusinessError: boolean }
+  options?: { skipBusinessError?: boolean; signal?: AbortSignal }
 ) {
   const config = {
     method,
@@ -885,6 +890,12 @@ function groupFormValues(group: GroupDetail) {
   }
 }
 
+type ModelTestResult =
+  | { status: 'queued' | 'testing' }
+  | { status: 'finished'; elapsedMs: number; error?: string }
+
+const upstreamModelTestConcurrency = 3
+
 function UpstreamModelTestDialog({
   group,
   quotes,
@@ -893,32 +904,98 @@ function UpstreamModelTestDialog({
   quotes: Preview[]
 }) {
   const { t } = useTranslation()
-  const [selectedModel, setSelectedModel] = useState('')
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(
+    () => new Set()
+  )
+  const [results, setResults] = useState<Map<string, ModelTestResult>>(
+    () => new Map()
+  )
   const [search, setSearch] = useState('')
+  const batchController = useRef<AbortController>(null)
+  useEffect(() => () => batchController.current?.abort(), [])
+
+  const models = quotes.map(({ quote }) => quote.model_id)
   const keyword = search.trim().toLowerCase()
-  const matchingModels = quotes.filter(({ quote }) =>
-    quote.model_id.toLowerCase().includes(keyword)
+  const matchingModels = models.filter((model) =>
+    model.toLowerCase().includes(keyword)
   )
-  const model = matchingModels.some(
-    ({ quote }) => quote.model_id === selectedModel
+  const selected = models.filter((model) => selectedModels.has(model))
+  const allMatchingSelected = matchingModels.every((model) =>
+    selectedModels.has(model)
   )
-    ? selectedModel
-    : ''
   const configured = Boolean(group.key_hint && group.base_url)
-  const test = useMutation({
-    mutationFn: (model: string) =>
-      request<{ elapsed_ms: number; error?: string }>(
-        'post',
-        `/groups/${group.id}/test`,
-        { model },
-        { skipBusinessError: true }
-      ),
+  const batchTest = useMutation({
+    networkMode: 'always',
+    retry: false,
+    mutationFn: async (modelsToTest: string[]) => {
+      const controller = new AbortController()
+      batchController.current = controller
+      const { signal } = controller
+      setResults((previous) => {
+        const next = new Map(previous)
+        for (const model of modelsToTest) next.set(model, { status: 'queued' })
+        return next
+      })
+
+      const queue = modelsToTest.values()
+      async function runTests() {
+        for (const model of queue) {
+          if (signal.aborted) break
+          setResult(model, { status: 'testing' })
+          const started = performance.now()
+          let result: ModelTestResult
+          try {
+            const data = await request<{ elapsed_ms: number; error?: string }>(
+              'post',
+              `/groups/${group.id}/test`,
+              { model },
+              { skipBusinessError: true, signal }
+            )
+            result = {
+              status: 'finished',
+              elapsedMs: data.elapsed_ms,
+              error: data.error,
+            }
+          } catch (error) {
+            result = {
+              status: 'finished',
+              elapsedMs: Math.round(performance.now() - started),
+              error:
+                (isAxiosError<Envelope<unknown>>(error)
+                  ? error.response?.data?.message || error.message
+                  : error instanceof Error && error.message) ||
+                'Failed to test channel',
+            }
+          }
+          if (!signal.aborted) setResult(model, result)
+        }
+      }
+
+      await Promise.all(
+        Array.from(
+          {
+            length: Math.min(upstreamModelTestConcurrency, modelsToTest.length),
+          },
+          runTests
+        )
+      )
+    },
   })
-  const result = test.variables === model ? test.data : undefined
-  const error =
-    test.variables === model
-      ? (test.error?.message ?? result?.error)
-      : undefined
+
+  function setResult(model: string, result: ModelTestResult) {
+    setResults((previous) => new Map(previous).set(model, result))
+  }
+
+  function updateSelection(modelsToUpdate: string[], checked: boolean) {
+    setSelectedModels((previous) => {
+      const next = new Set(previous)
+      for (const model of modelsToUpdate) {
+        if (checked) next.add(model)
+        else next.delete(model)
+      }
+      return next
+    })
+  }
 
   return (
     <Dialog>
@@ -927,7 +1004,7 @@ function UpstreamModelTestDialog({
       >
         {t('Test Model')}
       </DialogTrigger>
-      <DialogContent className='max-h-[85dvh] overflow-y-auto sm:max-w-md'>
+      <DialogContent className='max-h-[85dvh] overflow-y-auto sm:max-w-2xl'>
         <DialogHeader>
           <DialogTitle>{t('Test Model')}</DialogTitle>
           <DialogDescription className='break-words'>
@@ -935,48 +1012,106 @@ function UpstreamModelTestDialog({
           </DialogDescription>
         </DialogHeader>
         <div className='flex min-w-0 flex-col gap-4'>
-          {quotes.length > 0 ? (
+          {models.length > 0 ? (
             <FieldGroup className='gap-2'>
               <Field>
                 <FieldLabel htmlFor='upstream-test-search'>
-                  {t('Select Model')}
+                  {t('Search models')}
                 </FieldLabel>
                 <Input
                   id='upstream-test-search'
                   type='search'
                   placeholder={t('Search models...')}
-                  disabled={test.isPending}
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
               </Field>
               {matchingModels.length > 0 ? (
-                <RadioGroup
-                  aria-label={t('Model')}
-                  className='max-h-52 gap-0.5 overflow-y-auto rounded-lg border p-1'
-                  disabled={test.isPending}
-                  value={model}
-                  onValueChange={(value: string) => {
-                    setSelectedModel(value)
-                    test.reset()
-                  }}
-                >
-                  {matchingModels.map(({ quote }) => {
-                    const id = `upstream-test-${group.id}-${encodeURIComponent(quote.model_id)}`
-                    return (
-                      <FieldLabel
-                        key={quote.model_id}
-                        htmlFor={id}
-                        className='hover:bg-accent has-data-checked:bg-accent w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5'
-                      >
-                        <RadioGroupItem id={id} value={quote.model_id} />
-                        <span className='min-w-0 [overflow-wrap:anywhere]'>
-                          {quote.model_id}
-                        </span>
-                      </FieldLabel>
-                    )
-                  })}
-                </RadioGroup>
+                <div className='overflow-hidden rounded-lg border'>
+                  <FieldLabel
+                    htmlFor='upstream-test-select-all'
+                    className='flex w-full cursor-pointer items-center gap-3 border-b px-3 py-2'
+                  >
+                    <Checkbox
+                      id='upstream-test-select-all'
+                      checked={allMatchingSelected}
+                      indeterminate={
+                        !allMatchingSelected &&
+                        matchingModels.some((model) =>
+                          selectedModels.has(model)
+                        )
+                      }
+                      disabled={batchTest.isPending}
+                      onCheckedChange={(checked) =>
+                        updateSelection(matchingModels, checked)
+                      }
+                    />
+                    {t('Select all (filtered)')}
+                  </FieldLabel>
+                  <ul className='max-h-[42dvh] divide-y overflow-y-auto'>
+                    {matchingModels.map((model) => {
+                      const id = `upstream-test-${group.id}-${encodeURIComponent(model)}`
+                      const result = results.get(model)
+                      const finished =
+                        result?.status === 'finished' ? result : undefined
+                      const status = {
+                        idle: 'Not tested',
+                        queued: 'Queued',
+                        testing: 'Testing...',
+                        finished: finished?.error ? 'Failed' : 'Success',
+                      }[result?.status ?? 'idle']
+                      return (
+                        <li key={model} className='px-3 py-2'>
+                          <div className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between'>
+                            <FieldLabel
+                              htmlFor={id}
+                              className='min-w-0 cursor-pointer items-start gap-3'
+                            >
+                              <Checkbox
+                                id={id}
+                                className='mt-0.5'
+                                checked={selectedModels.has(model)}
+                                disabled={batchTest.isPending}
+                                onCheckedChange={(checked) =>
+                                  updateSelection([model], checked)
+                                }
+                              />
+                              <span className='min-w-0 [overflow-wrap:anywhere]'>
+                                {model}
+                              </span>
+                            </FieldLabel>
+                            <div
+                              role='status'
+                              className='flex flex-wrap items-center gap-2 pl-7 sm:shrink-0 sm:pl-0'
+                            >
+                              <Badge
+                                variant={
+                                  finished?.error ? 'destructive' : 'secondary'
+                                }
+                              >
+                                {t(status)}
+                              </Badge>
+                              {finished && (
+                                <span className='text-muted-foreground text-xs tabular-nums'>
+                                  {t('{{value}}ms', {
+                                    value: finished.elapsedMs,
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {finished?.error && (
+                            <p className='text-destructive mt-1 pl-7 text-xs [overflow-wrap:anywhere]'>
+                              {t(finished.error, {
+                                defaultValue: finished.error,
+                              })}
+                            </p>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
               ) : (
                 <p className='text-muted-foreground' role='status'>
                   {t('No models found')}
@@ -993,40 +1128,26 @@ function UpstreamModelTestDialog({
               {t('Save the upstream API key and base URL before testing.')}
             </p>
           )}
-          {(test.isPending || result || error) && (
-            <div role='status' className='flex min-w-0 flex-col gap-1'>
-              {test.isPending ? (
-                <span>{t('Testing...')}</span>
-              ) : (
-                <div className='flex flex-wrap items-center gap-2'>
-                  <Badge variant={error ? 'destructive' : 'secondary'}>
-                    {error ? t('Failed') : t('Success')}
-                  </Badge>
-                  {result && (
-                    <span className='text-muted-foreground tabular-nums'>
-                      {t('Response Time')} ·{' '}
-                      {t('{{value}}ms', { value: result.elapsed_ms })}
-                    </span>
-                  )}
-                </div>
-              )}
-              {error && (
-                <p className='text-destructive [overflow-wrap:anywhere]'>
-                  {t(error, { defaultValue: error })}
-                </p>
-              )}
-            </div>
-          )}
-          <DialogFooter>
+          <DialogFooter className='sm:items-center'>
+            <span
+              className='text-muted-foreground text-sm sm:mr-auto'
+              role='status'
+            >
+              {t('Selected models')} ({selected.length})
+            </span>
             <DialogClose render={<Button type='button' variant='outline' />}>
               {t('Close')}
             </DialogClose>
             <Button
               type='button'
-              disabled={!model || !configured || test.isPending}
-              onClick={() => test.mutate(model)}
+              disabled={
+                selected.length === 0 || !configured || batchTest.isPending
+              }
+              onClick={() => batchTest.mutate(selected)}
             >
-              {t('Test Connection')}
+              {batchTest.isPending
+                ? t('Testing...')
+                : t('Test selected models')}
             </Button>
           </DialogFooter>
         </div>

@@ -3725,6 +3725,7 @@
     "Test Latency": "Проверить задержку",
     "Test Mode": "Тестовый режим",
     "Test Model": "Проверить модель",
+    "Test selected models": "Проверить выбранные модели",
     "Save the upstream API key and base URL before testing.": "Перед тестированием сохраните ключ API и базовый URL поставщика.",
     "This model has no supported test endpoint for the group's API protocol.": "Протокол API группы не поддерживает тестирование этой модели ни на одной конечной точке.",
     "Uses the group's saved upstream settings.": "Используются сохранённые настройки поставщика для этой группы.",
