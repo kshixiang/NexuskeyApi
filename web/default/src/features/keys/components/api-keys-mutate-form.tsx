@@ -234,6 +234,23 @@ export function ApiKeysMutateForm({
   const quotaPlaceholder = tokensOnly
     ? t('Enter quota in tokens')
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
+  const nameFilter = form.watch('name').trim().toLowerCase()
+  const visibleGroups =
+    !isUpdate && nameFilter
+      ? groups.filter((group) => {
+          const searchableText = [
+            group.value,
+            group.label,
+            group.desc,
+            group.ratio,
+          ]
+            .filter((value) => value !== undefined && value !== null)
+            .join(' ')
+            .toLowerCase()
+
+          return searchableText.includes(nameFilter)
+        })
+      : groups
   const selectedGroup = form.watch('group')
   const hasSelectedGroup = groups.some((group) => group.value === selectedGroup)
   const unlimitedQuota = form.watch('unlimited_quota')
@@ -343,7 +360,7 @@ export function ApiKeysMutateForm({
                           </span>
                         </FieldLegend>
                         <ApiKeyGroupCards
-                          options={groups}
+                          options={visibleGroups}
                           value={field.value}
                           onValueChange={field.onChange}
                           isLoading={groupsPending}
