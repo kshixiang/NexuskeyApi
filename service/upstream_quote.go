@@ -50,15 +50,16 @@ type UpstreamImportGroupPreview struct {
 }
 
 type UpstreamGroupConfig struct {
-	Name            string   `json:"name"`
-	SalesName       string   `json:"sales_name"`
-	APIKey          *string  `json:"api_key"`
-	BaseURL         string   `json:"base_url"`
-	Protocol        string   `json:"protocol"`
-	Multiplier      float64  `json:"multiplier"`
-	FinalMultiplier *float64 `json:"final_multiplier"`
-	CreditCost      float64  `json:"credit_cost"`
-	Revision        int      `json:"revision"`
+	Name            string                         `json:"name"`
+	SalesName       string                         `json:"sales_name"`
+	APIKey          *string                        `json:"api_key"`
+	BaseURL         string                         `json:"base_url"`
+	Protocol        string                         `json:"protocol"`
+	Multiplier      float64                        `json:"multiplier"`
+	FinalMultiplier *float64                       `json:"final_multiplier"`
+	SaleMultipliers *model.UpstreamSaleMultipliers `json:"sale_multipliers"`
+	CreditCost      float64                        `json:"credit_cost"`
+	Revision        int                            `json:"revision"`
 }
 
 type UpstreamChannelView struct {
@@ -451,7 +452,7 @@ func ListUpstreamQuoteChannels() ([]UpstreamChannelView, error) {
 		Snapshot        string
 	}
 	if err := publishedUpstreamQuoteGroups(model.DB).
-		Select("grp.id AS group_id, ver.markup, ver.final_multiplier, quote.snapshot").
+		Select("grp.id AS group_id, ver.markup, COALESCE(sale.final_multiplier, ver.final_multiplier) AS final_multiplier, quote.snapshot").
 		Joins("LEFT JOIN upstream_sale_models AS sale ON sale.version_id = ver.id").
 		Joins("LEFT JOIN upstream_quote_versions AS quote ON quote.id = sale.quote_version").
 		Scan(&publishedRows).Error; err != nil {
@@ -568,6 +569,20 @@ func SaveUpstreamGroupConfig(id int, input UpstreamGroupConfig) error {
 		"protocol": input.Protocol, "multiplier": input.Multiplier, "credit_cost": input.CreditCost}
 	if input.FinalMultiplier != nil {
 		values["final_multiplier"] = *input.FinalMultiplier
+		values["sale_multipliers"] = nil
+	}
+	if input.SaleMultipliers != nil {
+		seen := make(map[float64]bool)
+		for _, rate := range *input.SaleMultipliers {
+			if rate.Upstream <= 0 || rate.Sale <= 0 || !validUpstreamAmount(rate.Upstream) || !validUpstreamAmount(rate.Sale) || seen[rate.Upstream] {
+				return errors.New("enter unique positive upstream multipliers and sales multipliers")
+			}
+			seen[rate.Upstream] = true
+		}
+		values["sale_multipliers"] = *input.SaleMultipliers
+		if len(*input.SaleMultipliers) > 0 {
+			values["final_multiplier"] = nil
+		}
 	}
 	if input.APIKey != nil {
 		key := strings.TrimSpace(*input.APIKey)
@@ -726,7 +741,7 @@ func previewUpstreamGroup(tx *gorm.DB, id int, multiplier *float64) (UpstreamGro
 	preview.UpstreamMultiplier = multipliers.common()
 	for index := range quotes {
 		item := &quotes[index]
-		adjustment, err := upstreamSalesAdjustment(preview.UpstreamQuoteGroup, ratio, item.UpstreamMultiplier)
+		adjustment, final, err := upstreamSalesAdjustment(preview.UpstreamQuoteGroup, ratio, item.UpstreamMultiplier)
 		if err != nil {
 			item.Error = err.Error()
 			continue
@@ -737,6 +752,7 @@ func previewUpstreamGroup(tx *gorm.DB, id int, multiplier *float64) (UpstreamGro
 			continue
 		}
 		price.QuoteVersion = item.QuoteVersion
+		price.FinalMultiplier = final
 		item.Sale = &price
 	}
 	preview.Quotes = quotes
@@ -760,6 +776,7 @@ func SetUpstreamGroupListing(id, revision, restoreVersion int, publish bool) err
 		version := model.UpstreamSaleVersion{
 			GroupID: id, Markup: preview.Multiplier, CreditCost: preview.CreditCost,
 			FinalMultiplier: preview.FinalMultiplier,
+			SaleMultipliers: preview.SaleMultipliers,
 			Protocol:        preview.Protocol, CreatedAt: time.Now().Unix(),
 		}
 		if publish {
@@ -790,6 +807,7 @@ func publishUpstreamGroup(tx *gorm.DB, preview UpstreamGroupPreview, version *mo
 		}
 		version.Markup = previous.Markup
 		version.FinalMultiplier = previous.FinalMultiplier
+		version.SaleMultipliers = previous.SaleMultipliers
 		version.CreditCost = previous.CreditCost
 		if err := tx.Where("version_id = ?", previous.ID).Find(&prices).Error; err != nil {
 			return err

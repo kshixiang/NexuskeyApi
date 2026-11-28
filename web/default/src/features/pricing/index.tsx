@@ -73,10 +73,20 @@ export function Pricing() {
   )
   const displayGroupRatios = useMemo(() => {
     const ratios = { ...groupRatio }
+    const saleRatios = new Map<string, number | null | undefined>()
     for (const model of models) {
-      if (model.sale_group && model.sale_group_multiplier != null) {
-        ratios[model.sale_group] = model.sale_group_multiplier
+      const group = model.sale_group
+      if (!group) continue
+      const rate = model.sale_group_multiplier
+      if (!saleRatios.has(group)) {
+        saleRatios.set(group, rate)
+      } else if (saleRatios.get(group) !== rate) {
+        saleRatios.set(group, null)
       }
+    }
+    for (const [group, rate] of saleRatios) {
+      if (rate === null) delete ratios[group]
+      else if (rate !== undefined) ratios[group] = rate
     }
     return ratios
   }, [groupRatio, models])

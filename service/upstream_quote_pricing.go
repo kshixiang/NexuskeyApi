@@ -132,6 +132,7 @@ func loadPublishedComparison(version int, name string, group *model.UpstreamQuot
 		}
 		group.Multiplier, group.CreditCost, group.Protocol = row.Markup, row.CreditCost, row.Protocol
 		group.FinalMultiplier = nil // Use the frozen published price.
+		group.SaleMultipliers = nil
 		result = append(result, UpstreamQuotePreview{Quote: quote, Sale: &row.UpstreamSaleModel})
 	}
 	return result, err
@@ -221,7 +222,7 @@ func evaluateUpstreamComparison(group model.UpstreamQuoteGroup, quote UpstreamQu
 		row.Sale = *input.Sale
 	} else {
 		_, applied := upstreamQuoteMultipliers(quote)
-		adjustment, err := upstreamSalesAdjustment(group, group.Multiplier, applied)
+		adjustment, _, err := upstreamSalesAdjustment(group, group.Multiplier, applied)
 		if err != nil {
 			return err
 		}
@@ -340,18 +341,32 @@ func (m upstreamGroupMultipliers) common() *float64 {
 	return m.rate
 }
 
-func upstreamSalesAdjustment(group model.UpstreamQuoteGroup, markup float64, applied *float64) (float64, error) {
-	if group.FinalMultiplier == nil {
-		return markup, nil
+func upstreamSalesAdjustment(group model.UpstreamQuoteGroup, markup float64, applied *float64) (float64, *float64, error) {
+	hasRate := applied != nil && *applied > 0 && validUpstreamAmount(*applied)
+	final := group.FinalMultiplier
+	if len(group.SaleMultipliers) > 0 {
+		if !hasRate {
+			return markup, nil, nil
+		}
+		index := slices.IndexFunc(group.SaleMultipliers, func(rate model.UpstreamSaleMultiplier) bool {
+			return rate.Upstream == *applied
+		})
+		if index < 0 {
+			return 0, nil, errors.New("set a sales multiplier for this upstream multiplier")
+		}
+		final = &group.SaleMultipliers[index].Sale
 	}
-	if applied == nil || *applied <= 0 || !validUpstreamAmount(*applied) {
-		return 0, errors.New("a positive upstream multiplier is required to calculate the final sale price")
+	if final == nil {
+		return markup, nil, nil
 	}
-	adjustment := *group.FinalMultiplier / *applied
-	if math.IsInf(adjustment, 0) {
-		return 0, errors.New("invalid sales multiplier")
+	if !hasRate {
+		return 0, nil, errors.New("a positive upstream multiplier is required to calculate the final sale price")
 	}
-	return adjustment, nil
+	adjustment := *final / *applied
+	if adjustment <= 0 || math.IsInf(adjustment, 0) {
+		return 0, nil, errors.New("invalid sales multiplier")
+	}
+	return adjustment, final, nil
 }
 
 func upstreamCostFactor(group model.UpstreamQuoteGroup, unit string) (float64, error) {

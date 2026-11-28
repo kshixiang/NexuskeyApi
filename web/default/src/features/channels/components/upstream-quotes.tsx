@@ -78,12 +78,14 @@ type Group = {
   upstream_multiplier?: number
   upstream_multipliers?: number[]
   final_multiplier?: number
+  sale_multipliers?: SaleMultiplier[]
   credit_cost: number
   revision: number
   active_version: number
   published: boolean
   published_multipliers?: number[]
 }
+type SaleMultiplier = { upstream: number; sale: number }
 type ChannelBalance = {
   balance: number
   balance_currency: string
@@ -142,6 +144,7 @@ type GroupDetail = Group & {
         created_at: number
         multiplier: number
         final_multiplier?: number
+        sale_multipliers?: SaleMultiplier[]
       }[]
     | null
 }
@@ -971,6 +974,30 @@ function groupSaleMultiplier(group: GroupDetail) {
 }
 
 function groupFormValues(group: GroupDetail) {
+  const upstreamRates = new Set(
+    (group.quotes ?? [])
+      .map((item) => item.upstream_multiplier)
+      .filter(
+        (rate): rate is number => rate != null && isValidSaleMultiplier(rate)
+      )
+  )
+  const rates = [...upstreamRates]
+    .sort((a, b) => a - b)
+    .map((upstream) => {
+      const saved = group.sale_multipliers?.find(
+        (rate) => rate.upstream === upstream
+      )
+      const sale = saved?.sale ?? group.final_multiplier
+      return {
+        upstream,
+        sale:
+          sale != null
+            ? String(sale)
+            : group.sale_multipliers?.length
+              ? ''
+              : String(Number((upstream * group.multiplier).toPrecision(15))),
+      }
+    })
   return {
     name: group.name,
     sales: group.sales_name,
@@ -978,8 +1005,13 @@ function groupFormValues(group: GroupDetail) {
     base: group.base_url,
     protocol: group.protocol,
     mark: String(groupSaleMultiplier(group)),
+    rates,
     revision: group.revision,
   }
+}
+
+function isValidSaleMultiplier(value: number) {
+  return value > 0 && value <= 1e9
 }
 
 type ModelTestResult =
@@ -1269,7 +1301,7 @@ function GroupSettings({
     }
     setConfirmedRevision(undefined)
   }
-  const { name, sales, key, base, protocol, mark } = form
+  const { name, sales, key, base, protocol, mark, rates } = form
   const quotes = group.quotes ?? []
   const pendingQuoteCount = quotes.filter(
     ({ quote }) => !quote.confirmed || !quote.usage_verified
@@ -1280,14 +1312,28 @@ function GroupSettings({
   const markChanged = ratio !== groupSaleMultiplier(group)
   const finalMultiplier =
     finalMode && markChanged ? ratio : group.final_multiplier
+  const ratePricing = rates.length > 0
+  const savedRates = groupFormValues(group).rates
+  const ratesChanged = rates.some(
+    (rate, index) => rate.sale !== savedRates[index]?.sale
+  )
+  const saleMultipliers = rates.map((rate) => ({
+    upstream: rate.upstream,
+    sale: Number(rate.sale),
+  }))
+  const invalidRates = saleMultipliers.some(
+    (rate) => !isValidSaleMultiplier(rate.sale)
+  )
+  const invalidPricingChange = ratesChanged && invalidRates
   const draft = {
     name,
     sales_name: sales,
     api_key: key || undefined,
     base_url: base,
     protocol,
-    multiplier: finalMode ? group.multiplier : ratio,
-    final_multiplier: finalMultiplier,
+    multiplier: ratePricing || finalMode ? group.multiplier : ratio,
+    final_multiplier: ratePricing ? undefined : finalMultiplier,
+    sale_multipliers: ratesChanged ? saleMultipliers : undefined,
     credit_cost: group.credit_cost,
     revision: group.revision,
   }
@@ -1297,7 +1343,8 @@ function GroupSettings({
     key !== '' ||
     base !== group.base_url ||
     protocol !== group.protocol ||
-    markChanged
+    markChanged ||
+    ratesChanged
   async function refresh() {
     await Promise.all([
       client.invalidateQueries({ queryKey: groupKey(group.id) }),
@@ -1355,6 +1402,11 @@ function GroupSettings({
     ratio > 0 && (!finalMode || costMultiplier != null)
       ? ((1 - (costMultiplier ?? 1) / ratio) * 100).toFixed(2) + '%'
       : '—'
+  const missingRateCount = quotes.filter(
+    (item) =>
+      item.upstream_multiplier == null ||
+      !isValidSaleMultiplier(item.upstream_multiplier)
+  ).length
   const busy = save.isPending || listing.isPending || confirmAll.isPending
   const blockedQuote = quotes.find(
     (item) =>
@@ -1372,7 +1424,11 @@ function GroupSettings({
       'Configure the upstream API key and base URL before publishing'
     )
   } else if (!historic) {
-    if (blockedQuote && quoteError) {
+    if (invalidRates) {
+      publishBlocker = t(
+        'Set a sales multiplier for each upstream multiplier before publishing'
+      )
+    } else if (blockedQuote && quoteError) {
       publishBlocker = `${blockedQuote.quote.model_id} · ${t(quoteError, { defaultValue: quoteError })}`
     } else if (blockedQuote || !quotes.some((item) => item.sale)) {
       publishBlocker = t(
@@ -1408,6 +1464,7 @@ function GroupSettings({
         className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3'
         onSubmit={(event) => {
           event.preventDefault()
+          if (invalidPricingChange) return
           save.mutate()
         }}
       >
@@ -1454,43 +1511,123 @@ function GroupSettings({
             <option value='anthropic'>Anthropic</option>
           </select>
         </div>
-        <div className='space-y-1'>
-          <span className='text-sm font-medium'>
-            {t('Upstream multiplier')}
-          </span>
-          <p className='flex min-h-8 items-center font-mono tabular-nums'>
-            {upstreamMultipliers}
-          </p>
-        </div>
-        <QuoteField
-          label={
-            finalMode ? t('Final sales multiplier') : t('Sales multiplier')
-          }
-          id='quote-markup'
-          value={mark}
-          onChange={(mark) => setForm({ ...form, mark })}
-          type='number'
-          min='0.000000001'
-          required
-        />
-        {costMultiplier != null && (
-          <div className='space-y-1'>
-            <span className='text-sm font-medium'>
-              {t('Multiplier spread')}
-            </span>
-            <p className='font-mono tabular-nums'>
-              {ratio > 0 ? formatQuoteMultiplier(ratio - costMultiplier) : '—'}
-            </p>
-          </div>
+        {ratePricing ? (
+          <FieldGroup className='gap-2 sm:col-span-2 xl:col-span-3'>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('Upstream multiplier')}</TableHead>
+                  <TableHead>{t('Final sales multiplier')}</TableHead>
+                  <TableHead>{t('Estimated gross margin')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rates.map((rate, index) => {
+                  const sale = Number(rate.sale)
+                  const valid = isValidSaleMultiplier(sale)
+                  const inputId = `quote-sale-multiplier-${index}`
+                  return (
+                    <TableRow key={rate.upstream}>
+                      <TableCell className='font-mono tabular-nums'>
+                        {formatQuoteMultiplier(rate.upstream)}
+                      </TableCell>
+                      <TableCell>
+                        <Field className='max-w-56' data-invalid={!valid}>
+                          <FieldLabel htmlFor={inputId} className='sr-only'>
+                            {t('Sales multiplier for upstream {{multiplier}}', {
+                              multiplier: formatQuoteMultiplier(rate.upstream),
+                            })}
+                          </FieldLabel>
+                          <Input
+                            id={inputId}
+                            type='number'
+                            min='0'
+                            max='1000000000'
+                            step='any'
+                            required={ratesChanged}
+                            aria-invalid={!valid}
+                            value={rate.sale}
+                            onChange={(event) =>
+                              setForm({
+                                ...form,
+                                rates: rates.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, sale: event.target.value }
+                                    : item
+                                ),
+                              })
+                            }
+                          />
+                        </Field>
+                      </TableCell>
+                      <TableCell
+                        className='font-mono tabular-nums'
+                        aria-live='polite'
+                      >
+                        {valid
+                          ? ((1 - rate.upstream / sale) * 100).toFixed(2) + '%'
+                          : '—'}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+            {missingRateCount > 0 &&
+              (finalMultiplier == null || ratesChanged) && (
+                <p className='text-muted-foreground text-sm'>
+                  {t(
+                    'Models without a positive upstream multiplier use the cost markup of {{multiplier}}.',
+                    {
+                      multiplier: formatQuoteMultiplier(group.multiplier),
+                    }
+                  )}
+                </p>
+              )}
+          </FieldGroup>
+        ) : (
+          <>
+            <div className='space-y-1'>
+              <span className='text-sm font-medium'>
+                {t('Upstream multiplier')}
+              </span>
+              <p className='flex min-h-8 items-center font-mono tabular-nums'>
+                {upstreamMultipliers}
+              </p>
+            </div>
+            <QuoteField
+              label={
+                finalMode ? t('Final sales multiplier') : t('Sales multiplier')
+              }
+              id='quote-markup'
+              value={mark}
+              onChange={(mark) => setForm({ ...form, mark })}
+              type='number'
+              min='0.000000001'
+              required
+            />
+            {costMultiplier != null && (
+              <div className='space-y-1'>
+                <span className='text-sm font-medium'>
+                  {t('Multiplier spread')}
+                </span>
+                <p className='font-mono tabular-nums'>
+                  {ratio > 0
+                    ? formatQuoteMultiplier(ratio - costMultiplier)
+                    : '—'}
+                </p>
+              </div>
+            )}
+            <div className='space-y-1'>
+              <span className='text-muted-foreground text-xs'>
+                {t('Estimated gross margin')}
+              </span>
+              <p className='font-mono text-sm'>{margin}</p>
+            </div>
+          </>
         )}
-        <div className='space-y-1'>
-          <span className='text-muted-foreground text-xs'>
-            {t('Estimated gross margin')}
-          </span>
-          <p className='font-mono text-sm'>{margin}</p>
-        </div>
         <div className='flex items-end'>
-          <Button disabled={!dirty || busy} type='submit'>
+          <Button disabled={!dirty || busy || invalidPricingChange} type='submit'>
             {t('Save group settings')}
           </Button>
         </div>
@@ -1526,8 +1663,13 @@ function GroupSettings({
           <SavedGroupQuotes
             group={group}
             quotes={quotes}
-            ratio={finalMode ? group.multiplier : ratio}
+            ratio={ratePricing || finalMode ? group.multiplier : ratio}
             finalMultiplier={finalMultiplier}
+            saleMultipliers={
+              ratesChanged || group.sale_multipliers?.length
+                ? saleMultipliers
+                : undefined
+            }
             credit={group.credit_cost}
             importedAt={importedAt}
             isConfirming={confirmAll.isPending}
@@ -1548,9 +1690,13 @@ function GroupSettings({
               <option key={version.id} value={version.id}>
                 #{version.id} ·{' '}
                 {new Date(version.created_at * 1000).toLocaleString()} ·{' '}
-                {formatQuoteMultiplier(
-                  version.final_multiplier ?? version.multiplier
-                )}
+                {version.sale_multipliers?.length
+                  ? formatMultiplierRange(
+                      version.sale_multipliers.map((rate) => rate.sale)
+                    )
+                  : formatQuoteMultiplier(
+                      version.final_multiplier ?? version.multiplier
+                    )}
               </option>
             ))}
           </select>
@@ -1601,6 +1747,7 @@ function SavedGroupQuotes(props: {
   quotes: Preview[]
   ratio: number
   finalMultiplier?: number
+  saleMultipliers?: SaleMultiplier[]
   credit: number
   importedAt: number
   isConfirming: boolean
@@ -1628,12 +1775,26 @@ function SavedGroupQuotes(props: {
       <tbody>
         {props.quotes.map((item) => {
           const sourceMultiplier = item.upstream_multiplier
-          const adjustment =
-            props.finalMultiplier == null
-              ? props.ratio
-              : sourceMultiplier != null && sourceMultiplier > 0
+          let adjustment = props.ratio
+          if (props.saleMultipliers?.length) {
+            if (
+              sourceMultiplier != null &&
+              isValidSaleMultiplier(sourceMultiplier)
+            ) {
+              const sale = props.saleMultipliers.find(
+                (rate) => rate.upstream === sourceMultiplier
+              )?.sale
+              adjustment =
+                sale != null && isValidSaleMultiplier(sale)
+                  ? sale / sourceMultiplier
+                  : 0
+            }
+          } else if (props.finalMultiplier != null) {
+            adjustment =
+              sourceMultiplier != null && sourceMultiplier > 0
                 ? props.finalMultiplier / sourceMultiplier
                 : 0
+          }
           const currencyFactor = item.quote.unit === 'credit' ? props.credit : 1
           return (
             <tr key={item.quote.model_id} className='border-t align-top'>

@@ -1,6 +1,8 @@
 package model
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -25,26 +27,63 @@ type UpstreamQuoteBalance struct {
 	BalanceUpdatedAt int64    `json:"balance_updated_at,omitempty"`
 }
 
+type UpstreamSaleMultiplier struct {
+	Upstream float64 `json:"upstream"`
+	Sale     float64 `json:"sale"`
+}
+
+// UpstreamSaleMultipliers stores pricing rules as portable TEXT in all databases.
+type UpstreamSaleMultipliers []UpstreamSaleMultiplier
+
+func (rates *UpstreamSaleMultipliers) Scan(value any) error {
+	*rates = nil
+	switch value := value.(type) {
+	case nil:
+		return nil
+	case string:
+		if value == "" {
+			return nil
+		}
+		return common.UnmarshalJsonStr(value, rates)
+	case []byte:
+		if len(value) == 0 {
+			return nil
+		}
+		return common.Unmarshal(value, rates)
+	default:
+		return fmt.Errorf("unsupported sales multiplier storage type %T", value)
+	}
+}
+
+func (rates UpstreamSaleMultipliers) Value() (driver.Value, error) {
+	if len(rates) == 0 {
+		return nil, nil
+	}
+	data, err := common.Marshal(rates)
+	return string(data), err
+}
+
 type UpstreamQuoteGroup struct {
-	ID                   int       `json:"id"`
-	ChannelID            int       `json:"channel_id" gorm:"uniqueIndex:idx_upstream_group_source;not null"`
-	SourceGroup          string    `json:"source_group" gorm:"size:64;uniqueIndex:idx_upstream_group_source;not null"`
-	OriginalName         string    `json:"original_name"`
-	Name                 string    `json:"name"`
-	SalesName            string    `json:"sales_name"`
-	APIKey               string    `json:"-" gorm:"type:text"`
-	KeyHint              string    `json:"key_hint" gorm:"-"`
-	BaseURL              string    `json:"base_url"`
-	Protocol             string    `json:"protocol"`
-	Multiplier           float64   `json:"multiplier"`
-	FinalMultiplier      *float64  `json:"final_multiplier,omitempty"`
-	UpstreamMultiplier   *float64  `json:"upstream_multiplier,omitempty" gorm:"-"`
-	UpstreamMultipliers  []float64 `json:"upstream_multipliers,omitempty" gorm:"-"`
-	CreditCost           float64   `json:"credit_cost"`
-	Revision             int       `json:"revision"`
-	ActiveVersion        int       `json:"active_version"`
-	Published            bool      `json:"published" gorm:"-"`
-	PublishedMultipliers []float64 `json:"published_multipliers,omitempty" gorm:"-"`
+	ID                   int                     `json:"id"`
+	ChannelID            int                     `json:"channel_id" gorm:"uniqueIndex:idx_upstream_group_source;not null"`
+	SourceGroup          string                  `json:"source_group" gorm:"size:64;uniqueIndex:idx_upstream_group_source;not null"`
+	OriginalName         string                  `json:"original_name"`
+	Name                 string                  `json:"name"`
+	SalesName            string                  `json:"sales_name"`
+	APIKey               string                  `json:"-" gorm:"type:text"`
+	KeyHint              string                  `json:"key_hint" gorm:"-"`
+	BaseURL              string                  `json:"base_url"`
+	Protocol             string                  `json:"protocol"`
+	Multiplier           float64                 `json:"multiplier"`
+	FinalMultiplier      *float64                `json:"final_multiplier,omitempty"`
+	SaleMultipliers      UpstreamSaleMultipliers `json:"sale_multipliers,omitempty" gorm:"type:text"`
+	UpstreamMultiplier   *float64                `json:"upstream_multiplier,omitempty" gorm:"-"`
+	UpstreamMultipliers  []float64               `json:"upstream_multipliers,omitempty" gorm:"-"`
+	CreditCost           float64                 `json:"credit_cost"`
+	Revision             int                     `json:"revision"`
+	ActiveVersion        int                     `json:"active_version"`
+	Published            bool                    `json:"published" gorm:"-"`
+	PublishedMultipliers []float64               `json:"published_multipliers,omitempty" gorm:"-"`
 }
 
 type UpstreamQuoteModel struct {
@@ -64,26 +103,28 @@ type UpstreamQuoteVersion struct {
 }
 
 type UpstreamSaleVersion struct {
-	ID              int      `json:"id"`
-	GroupID         int      `json:"group_id" gorm:"index;not null"`
-	ChannelID       int      `json:"channel_id"`
-	Markup          float64  `json:"multiplier"`
-	FinalMultiplier *float64 `json:"final_multiplier,omitempty"`
-	CreditCost      float64  `json:"-"`
-	Protocol        string   `json:"-"`
-	CreatedAt       int64    `json:"created_at"`
+	ID              int                     `json:"id"`
+	GroupID         int                     `json:"group_id" gorm:"index;not null"`
+	ChannelID       int                     `json:"channel_id"`
+	Markup          float64                 `json:"multiplier"`
+	FinalMultiplier *float64                `json:"final_multiplier,omitempty"`
+	SaleMultipliers UpstreamSaleMultipliers `json:"sale_multipliers,omitempty" gorm:"type:text"`
+	CreditCost      float64                 `json:"-"`
+	Protocol        string                  `json:"-"`
+	CreatedAt       int64                   `json:"created_at"`
 }
 
 type UpstreamSaleModel struct {
-	ID           int     `json:"id"`
-	VersionID    int     `json:"version_id" gorm:"uniqueIndex:idx_upstream_sale_model;not null"`
-	ModelName    string  `json:"model_name" gorm:"size:191;uniqueIndex:idx_upstream_sale_model;not null"`
-	UpstreamName string  `json:"upstream_name"`
-	QuoteVersion int     `json:"quote_version"`
-	Expression   string  `json:"expression" gorm:"type:text"`
-	FixedPrice   float64 `json:"fixed_price"`
-	Fixed        bool    `json:"fixed"`
-	Endpoints    string  `json:"endpoints"`
+	ID              int      `json:"id"`
+	VersionID       int      `json:"version_id" gorm:"uniqueIndex:idx_upstream_sale_model;not null"`
+	ModelName       string   `json:"model_name" gorm:"size:191;uniqueIndex:idx_upstream_sale_model;not null"`
+	UpstreamName    string   `json:"upstream_name"`
+	QuoteVersion    int      `json:"quote_version"`
+	Expression      string   `json:"expression" gorm:"type:text"`
+	FixedPrice      float64  `json:"fixed_price"`
+	Fixed           bool     `json:"fixed"`
+	FinalMultiplier *float64 `json:"final_multiplier,omitempty"`
+	Endpoints       string   `json:"endpoints"`
 }
 
 type UpstreamSaleRoute struct {
@@ -136,7 +177,7 @@ func ResolveUpstreamSaleRoute(group, modelName string) (*UpstreamSaleRoute, erro
 		FixedPrice            float64
 	}
 	result := activeUpstreamSaleModels().Where("grp.id = ? AND sale.model_name = ?", id, modelName).
-		Select("ch.*, grp.sales_name, ver.final_multiplier, ver.id AS version, " +
+		Select("ch.*, grp.sales_name, COALESCE(sale.final_multiplier, ver.final_multiplier) AS final_multiplier, ver.id AS version, " +
 			"sale.model_name, sale.quote_version, sale.expression, sale.endpoints, sale.fixed, sale.fixed_price").Limit(1).Scan(&row)
 	if result.Error != nil || result.RowsAffected == 0 || row.Group != group || row.ModelName != modelName || row.Key == "" {
 		return nil, result.Error
@@ -196,12 +237,12 @@ func PublishedUpstreamPricing() ([]Pricing, error) {
 // PublishedUpstreamPricingWithVendors returns metadata and vendors from the same lookup.
 func PublishedUpstreamPricingWithVendors() ([]Pricing, []PricingVendor, error) {
 	var rows []struct {
-		UpstreamSaleModel `gorm:"embedded"`
-		GroupID           int
-		SalesName         string
-		FinalMultiplier   *float64
+		UpstreamSaleModel   `gorm:"embedded"`
+		GroupID             int
+		SalesName           string
+		EffectiveMultiplier *float64
 	}
-	err := activeUpstreamSaleModels().Select("sale.*, grp.id AS group_id, grp.sales_name, ver.final_multiplier").Order("grp.id, sale.model_name").Scan(&rows).Error
+	err := activeUpstreamSaleModels().Select("sale.*, grp.id AS group_id, grp.sales_name, COALESCE(sale.final_multiplier, ver.final_multiplier) AS effective_multiplier").Order("grp.id, sale.model_name").Scan(&rows).Error
 	if err != nil {
 		return nil, nil, err
 	}
@@ -222,7 +263,7 @@ func PublishedUpstreamPricingWithVendors() ([]Pricing, []PricingVendor, error) {
 		price.Description = meta.Description
 		price.Icon = meta.Icon
 		price.Tags = meta.Tags
-		price.SaleGroupMultiplier = row.FinalMultiplier
+		price.SaleGroupMultiplier = row.EffectiveMultiplier
 		for _, endpoint := range strings.Split(row.Endpoints, ",") {
 			price.SupportedEndpointTypes = append(price.SupportedEndpointTypes, constant.EndpointType(endpoint))
 		}

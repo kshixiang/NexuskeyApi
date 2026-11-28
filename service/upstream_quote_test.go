@@ -98,6 +98,79 @@ func TestStringQuoteModelMultipliers(t *testing.T) {
 	require.Len(t, channels[0].Groups, 1)
 	require.Nil(t, channels[0].Groups[0].UpstreamMultiplier)
 	require.Equal(t, []float64{0.2, 1.8}, channels[0].Groups[0].UpstreamMultipliers)
+
+	t.Run("publish and restore separate sale multipliers", func(t *testing.T) {
+		group := channels[0].Groups[0]
+		for index, cost := range []float64{2, 18} {
+			quote := quotes[index]
+			quote.Unit = "usd"
+			if index == 0 {
+				quote.Kind = "token"
+				quote.Tiers = []UpstreamTier{{Input: common.GetPointer(cost), Output: common.GetPointer(8.0)}}
+			} else {
+				quote.Kind = "fixed"
+				quote.FixedPrice = common.GetPointer(cost)
+			}
+			quote.Endpoints = []string{"openai"}
+			quote.Confirmed, quote.UsageVerified = true, true
+			require.NoError(t, SaveUpstreamModelQuote(group.ID, group.Revision+index, quote))
+		}
+		rates := model.UpstreamSaleMultipliers{
+			{Upstream: 0.2, Sale: 0.3},
+			{Upstream: 1.8, Sale: 2},
+		}
+		config := UpstreamGroupConfig{
+			Name: group.Name, SalesName: group.SalesName, Protocol: "openai",
+			APIKey: common.GetPointer("test-key"), BaseURL: "https://www.string.ink",
+			Multiplier: 1, SaleMultipliers: &rates, Revision: group.Revision + 2,
+		}
+		require.NoError(t, SaveUpstreamGroupConfig(group.ID, config))
+		preview, err := PreviewUpstreamGroup(group.ID, nil)
+		require.NoError(t, err)
+		require.Equal(t, rates, preview.SaleMultipliers)
+		require.NotNil(t, preview.Quotes[0].Sale)
+		require.NotNil(t, preview.Quotes[1].Sale)
+		amount, _, err := billingexpr.RunExpr(preview.Quotes[0].Sale.Expression, billingexpr.TokenParams{P: 1e6})
+		require.NoError(t, err)
+		require.InDelta(t, 3, amount/1e6, 1e-9)
+		require.InDelta(t, 20, preview.Quotes[1].Sale.FixedPrice, 1e-9)
+		require.NoError(t, SetUpstreamGroupListing(group.ID, preview.Revision, 0, true))
+		published, err := PreviewUpstreamGroup(group.ID, nil)
+		require.NoError(t, err)
+		require.Equal(t, rates, published.Versions[0].SaleMultipliers)
+		channels, err := ListUpstreamQuoteChannels()
+		require.NoError(t, err)
+		require.Equal(t, []float64{0.3, 2}, channels[0].Groups[0].PublishedMultipliers)
+
+		incompleteRates := rates[:1]
+		config.Revision, config.SaleMultipliers = published.Revision, &incompleteRates
+		require.NoError(t, SaveUpstreamGroupConfig(group.ID, config))
+		require.ErrorContains(t, SetUpstreamGroupListing(group.ID, config.Revision+1, 0, true),
+			"set a sales multiplier for this upstream multiplier")
+		comparison, err := CompareUpstreamQuotes(UpstreamComparison{Model: quotes[1].ModelID, Published: true})
+		require.NoError(t, err)
+		require.Len(t, comparison, 1)
+		require.Empty(t, comparison[0].Error)
+		require.InDelta(t, 20, comparison[0].Sale, 1e-9)
+
+		require.NoError(t, SetUpstreamGroupListing(group.ID, config.Revision+1, published.ActiveVersion, true))
+		saleGroup := model.UpstreamSaleGroupKey(group.ID)
+		tokenRoute, err := model.ResolveUpstreamSaleRoute(saleGroup, quotes[0].ModelID)
+		require.NoError(t, err)
+		require.NotNil(t, tokenRoute)
+		require.NotEqual(t, published.ActiveVersion, tokenRoute.Version)
+		require.Equal(t, common.GetPointer(0.3), tokenRoute.FinalMultiplier)
+		amount, _, err = billingexpr.RunExpr(tokenRoute.Expression, billingexpr.TokenParams{P: 1e6})
+		require.NoError(t, err)
+		require.InDelta(t, 3, amount/1e6, 1e-9)
+
+		route, err := model.ResolveUpstreamSaleRoute(saleGroup, quotes[1].ModelID)
+		require.NoError(t, err)
+		require.NotNil(t, route)
+		require.Equal(t, tokenRoute.Version, route.Version)
+		require.Equal(t, common.GetPointer(2.0), route.FinalMultiplier)
+		require.InDelta(t, 20, route.FixedPrice, 1e-9)
+	})
 }
 
 func TestListUpstreamQuoteChannelsPublishedGroups(t *testing.T) {

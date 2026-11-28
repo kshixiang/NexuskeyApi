@@ -124,11 +124,12 @@ export function PricingTable(props: PricingTableProps) {
         const firstModel = models[0]
         const groupName =
           props.groupNames?.[group] ?? firstModel.sale_group_name ?? group
-        const multiplier =
-          props.groupRatios?.[group] ?? firstModel.group_ratio?.[group]
         // Published sale expressions already contain their markup. The API
         // supplies no separate base price for these models.
         const showBasePrice = !firstModel.sale_group
+        const multiplier =
+          props.groupRatios?.[group] ??
+          (showBasePrice ? firstModel.group_ratio?.[group] : undefined)
         return (
           <section
             key={group}
